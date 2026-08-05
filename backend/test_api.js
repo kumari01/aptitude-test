@@ -16,19 +16,36 @@ async function testFlow() {
     const baseUrl = "http://localhost:3001";
 
     // 1. Register student
+    const randId = Math.floor(1000 + Math.random() * 9000);
+    const testRollNo = `21A12A${randId}`;
+    const testPassword = "Test@12345";
     console.log("\n1. Testing Student Signup...");
     const studentRes = await fetch(`${baseUrl}/api/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: "teststudent",
-        rollno: "STU" + Date.now(),
-        email: "student" + Date.now() + "@example.com"
+        rollno: testRollNo,
+        email: "student" + Date.now() + "@example.com",
+        password: testPassword
       })
     });
     const studentData = await studentRes.json();
     console.log("Student Response:", studentData);
     const studentId = studentData.student._id;
+
+    // 1b. Test Student Login
+    console.log("\n1b. Testing Student Login...");
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rollno: testRollNo,
+        password: testPassword
+      })
+    });
+    const loginData = await loginRes.json();
+    console.log("Student Login Response:", loginData);
 
     // 2. Create Exam
     console.log("\n2. Testing Exam Creation...");
