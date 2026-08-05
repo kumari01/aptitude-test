@@ -8,12 +8,17 @@ const studentSchema = new mongoose.Schema({
     rollno:{
         type: String,
         required:true,
-        unique:true
+        unique:true,
+        match: [/^\d{2}[A-Za-z]\d{2}[A-Za-z]\d{2}[A-Za-z0-9]{2}$/, "incorrect roll number format"]    
     },
     email:{
         type: String,
         required:true,
         unique:true
+    },
+    password:{
+        type: String,
+        required:true
     },
     role:{
         type:String,

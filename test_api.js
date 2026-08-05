@@ -23,7 +23,8 @@ async function testFlow() {
       body: JSON.stringify({
         username: "teststudent",
         rollno: "STU" + Date.now(),
-        email: "student" + Date.now() + "@example.com"
+        email: "student" + Date.now() + "@example.com",
+        password: "Test@12345"
       })
     });
     const studentData = await studentRes.json();
