@@ -179,7 +179,7 @@ async function runAuthTests() {
     );
 
     // Cleanup created test student
-    const Student = require("./src/model/user.model");
+    const { Student } = require("./src/model/user.model");
     await Student.deleteOne({ rollno: testUser.rollno });
     console.log("\nCleaned up test student from DB.");
 

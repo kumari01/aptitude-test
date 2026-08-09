@@ -44,7 +44,7 @@ const createQuestion = async(req,res) =>{
 const getQuestions = async(req,res)=>{
     try{
         //retrieve all questions for a specific exam
-        const examId = req.params.examId || req.body.exam_id;
+        const examId = req.params.examId || req.query?.exam_id || req.body?.exam_id;
         const questions = await questionModel.find(
             { exam_id: examId },
             {
