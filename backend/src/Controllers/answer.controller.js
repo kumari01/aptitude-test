@@ -115,7 +115,7 @@ const submitExam = async (req, res) => {
 
             const studentAns = answers.find(a => a.question_id.toString() === question._id.toString());
             if (studentAns) {
-                const isCorrect = question.correct_option_id.toString() === studentAns.selected_option_id.toString();
+                const isCorrect = question.correct_option_id && studentAns.selected_option_id && question.correct_option_id.toString() === studentAns.selected_option_id.toString();
                 studentAns.is_correct = isCorrect;
                 studentAns.marks_awarded = isCorrect ? qMarks : 0;
                 await studentAns.save();
