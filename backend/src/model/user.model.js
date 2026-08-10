@@ -8,7 +8,8 @@ const studentSchema = new mongoose.Schema({
     email:{
         type: String,
         required:true,
-        unique:true
+        unique:true,
+        match: [/@sasi\.ac\.in$/, "Only @sasi.ac.in emails are allowed"]
     },
     rollno:{
         type: String,
@@ -29,7 +30,8 @@ const adminSchema = new mongoose.Schema({
     email:{
         type: String,
         required:true,
-        unique:true
+        unique:true,
+        match: [/@sasi\.ac\.in$/, "Only @sasi.ac.in emails are allowed"]
     },
     adminid:{
         type: String,

@@ -39,6 +39,11 @@ export function LoginPage() {
         return;
       }
 
+      if (!email.toLowerCase().endsWith("@sasi.ac.in")) {
+        toast.warning("Only @sasi.ac.in email addresses are allowed!");
+        return;
+      }
+
       try {
         const endpoint = tab === "Student" ? "/auth/student/signup" : "/auth/admin/signup";
         const payload =

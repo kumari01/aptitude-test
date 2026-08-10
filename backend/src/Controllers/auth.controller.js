@@ -1,10 +1,17 @@
 const { Student: studentModel, Admin: adminModel } = require('../model/user.model');
+const ExamAttempt = require('../model/examAttempt_model');
+
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const RegisterStudent = async(req,res) =>{
     try{
         const {username,rollno,email,password} = req.body;
+
+        if (!email || !email.toLowerCase().endsWith("@sasi.ac.in")) {
+            return res.status(400).json({ message: 'Only @sasi.ac.in email addresses are allowed' });
+        }
+
         const existingStudent = await studentModel.findOne({$or: [{rollno}, {email}]});
 
         if(existingStudent){
@@ -79,6 +86,11 @@ const studentlogin = async(req,res) =>{
 const adminregister = async(req,res) =>{
     try{
         const {username,email,adminid,password} = req.body;
+
+        if (!email || !email.toLowerCase().endsWith("@sasi.ac.in")) {
+            return res.status(400).json({ message: 'Only @sasi.ac.in email addresses are allowed' });
+        }
+
         const isadmin = await adminModel.findOne({$or: [{email}, {adminid}]});
 
         if(isadmin){
@@ -151,7 +163,8 @@ const adminlogin = async(req,res) =>{
     } catch (error) {
         res.status(400).json({message: error.message});
     }
-}
+};
+
 const getStudentProfile = async (req, res) => {
   try {
     const student = await studentModel
@@ -176,4 +189,63 @@ const getStudentProfile = async (req, res) => {
     });
   }
 };
-module.exports = { RegisterStudent, studentlogin, adminregister, adminlogin,getStudentProfile };
+
+const getStudentProgress = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    // Fetch all submitted attempts for this student, populated with exam details
+    const attempts = await ExamAttempt.find({
+      student_id: studentId,
+      status: "Submitted",
+    })
+      .populate("exam_id", "title category totalMarks")
+      .sort({ submitted_at: -1 }).limit(7);
+
+    const examsCompleted = attempts.length;
+
+    if (examsCompleted === 0) {
+      return res.status(200).json({
+        examsCompleted: 0,
+        avgScore: "0%",
+        bestScore: "0%",
+        recentAttempts: [],
+      });
+    }
+
+    let totalPct = 0;
+    let bestPct = 0;
+
+    const recentAttempts = attempts.map((att) => {
+      const totalMarks = att.exam_id?.totalMarks || 30;
+      const pctValue = Math.round((att.score / totalMarks) * 100);
+      
+      totalPct += pctValue;
+      if (pctValue > bestPct) bestPct = pctValue;
+
+      return {
+        id: att._id,
+        title: att.exam_id?.title || "Exam Attempt",
+        score: `${pctValue}%`,
+        marks: `${att.score}/${totalMarks} marks`,
+        status: pctValue >= 50 ? "Passed" : "Failed",
+        date: att.submitted_at ? new Date(att.submitted_at).toLocaleDateString() : "N/A",
+      };
+    });
+
+    const avgScore = `${Math.round(totalPct / examsCompleted)}%`;
+    const bestScore = `${bestPct}%`;
+
+    res.status(200).json({
+      examsCompleted,
+      avgScore,
+      bestScore,
+      recentAttempts,
+    });
+  } catch (error) {
+    console.error("Error fetching student progress:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { RegisterStudent, studentlogin, adminregister, adminlogin, getStudentProfile, getStudentProgress };
