@@ -1,86 +1,120 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Hash, Lock, ArrowRight } from "lucide-react";
+import { Hash, Lock, ArrowRight, User, Mail, Shield } from "lucide-react";
 import Logo from "../components/common/Logo";
 import GoogleG from "../components/common/GoogleG";
 import { BRAND, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
+import { useToast } from "../context/ToastContext";
 import axios from "axios";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const toast = useToast();
+  const [isSignUp, setIsSignUp] = useState(false);
   const [tab, setTab] = useState("Student");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [roll, setRoll] = useState("");
+  const [adminId, setAdminId] = useState("");
   const [password, setPassword] = useState("");
-  const handleSignIn = async () => {
-    if (!roll || !password) {
-      alert(
-        `Please enter both ${
+
+  const resetForm = () => {
+    setUsername("");
+    setEmail("");
+    setRoll("");
+    setAdminId("");
+    setPassword("");
+  };
+
+  const handleToggleMode = (signUpState) => {
+    setIsSignUp(signUpState);
+    resetForm();
+  };
+
+  const handleSubmit = async () => {
+    if (isSignUp) {
+      // Validation for Sign Up
+      if (!username || !password || (tab === "Student" ? (!roll || !email) : (!adminId || !email))) {
+        toast.warning(`Please fill in all form fields for ${tab} registration`);
+        return;
+      }
+
+      try {
+        const endpoint = tab === "Student" ? "/auth/student/signup" : "/auth/admin/signup";
+        const payload =
           tab === "Student"
-            ? "roll number"
-            : "email/Admin ID"
-        } and password`
-      );
-      return;
-    }
+            ? { username, rollno: roll, email, password }
+            : { username, email, adminid: adminId, password };
 
-    try {
-      const endpoint =
-        tab === "Student"
-          ? "/auth/student/login"
-          : "/auth/admin/login";
+        const response = await axios.post(
+          `http://localhost:3000/api${endpoint}`,
+          payload,
+          { withCredentials: true }
+        );
 
-      const payload =
-        tab === "Student"
-          ? {
-              rollno: roll,
-              password: password,
-            }
-          : {
-              email: roll,
-              password: password,
-            };
+        console.log("Signup successful:", response.data);
+        toast.success(response.data.message || "Account created successfully! Switching to sign in...");
 
-      const response = await axios.post(
-        `http://localhost:3000/api${endpoint}`,
-        payload,
-        {
-          withCredentials: true,
+        // Switch to sign in mode after successful signup
+        setTimeout(() => {
+          setIsSignUp(false);
+          setPassword("");
+        }, 1500);
+      } catch (error) {
+        console.error("Signup error:", error);
+        toast.error(error.response?.data?.message || "Registration failed. Please check your inputs.");
+      }
+    } else {
+      // Sign In Logic
+      if (!roll || !password) {
+        toast.warning(`Please enter both ${tab === "Student" ? "roll number" : "email/Admin ID"} and password`);
+        return;
+      }
+
+      try {
+        const endpoint = tab === "Student" ? "/auth/student/login" : "/auth/admin/login";
+        const payload =
+          tab === "Student"
+            ? { rollno: roll, password }
+            : { email: roll, adminid: roll, password };
+
+        const response = await axios.post(
+          `http://localhost:3000/api${endpoint}`,
+          payload,
+          { withCredentials: true }
+        );
+
+        console.log("Login successful:", response.data);
+        toast.success("Logged in successfully!");
+
+        if (response.data.token) {
+          localStorage.setItem("token", response.data.token);
         }
-      );
+        if (response.data.student) {
+          localStorage.setItem("student", JSON.stringify(response.data.student));
+        } else if (response.data.admin) {
+          localStorage.setItem("admin", JSON.stringify(response.data.admin));
+        }
 
-      console.log("Login successful:", response.data);
-
-      if (response.data.token) {
-        localStorage.setItem("token", response.data.token);
-      }
-      if (response.data.student) {
-        localStorage.setItem("student", JSON.stringify(response.data.student));
-      } else if (response.data.admin) {
-        localStorage.setItem("admin", JSON.stringify(response.data.admin));
-      }
-
-      navigate("/dashboard");
-
-    } catch (error) {
-      console.error("Login error:", error);
-
-      if (error.response) {
-        alert(
-          error.response.data.message ||
-          "Login failed"
-        );
-      } else {
-        alert(
-          "Unable to connect to server. Please check if the server is running."
-        );
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 500);
+      } catch (error) {
+        console.error("Login error:", error);
+        if (error.response) {
+          toast.error(error.response.data.message || "Login failed");
+        } else {
+          toast.error("Unable to connect to server. Please check if the server is running.");
+        }
       }
     }
   };
+
   return (
     <div className="min-h-screen w-full flex" style={{ fontFamily: FONT_BODY }}>
       {/* LEFT — dark hero panel */}
       <div
-        className="hidden lg:flex flex-col justify-between w-1/2 relative overflow-hidden px-16 py-16"
+        className="hidden lg:flex flex-col justify-between w-1/2 relative overflow-hidden px-16 pt-10 pb-12"
         style={{
           background: "radial-gradient(circle at 30% 20%, #1a1a1a 0%, #000 65%)",
           borderRight: `3px solid ${BRAND}`,
@@ -97,12 +131,12 @@ export function LoginPage() {
 
         <Logo dark />
 
-        <div className="relative z-10">
+        <div className="relative z-10 my-auto">
           <h1
             className="text-5xl leading-[1.15] font-bold text-white mb-6"
             style={{ fontFamily: FONT_DISPLAY }}
           >
-            Weekly Aptitude
+            CampVex
             <br />
             <span style={{ color: BRAND }}>Examination Portal</span>
           </h1>
@@ -112,7 +146,7 @@ export function LoginPage() {
           </p>
         </div>
 
-        <div className="relative z-10 flex gap-10 pt-8 border-t border-white/10">
+        <div className="relative z-10 flex gap-10 pt-5 border-t border-white/10">
           <div>
             <div className="text-white font-bold text-lg" style={{ fontFamily: FONT_DISPLAY }}>
               Verbal
@@ -142,14 +176,19 @@ export function LoginPage() {
         </div>
       </div>
 
-      {/* RIGHT — sign in form */}
-      <div className="flex-1 flex items-center justify-center px-6 py-16 bg-white">
+      {/* RIGHT — sign in / sign up form */}
+      <div className="flex-1 flex items-center justify-center px-6 pt-8 pb-10 bg-white overflow-y-auto">
         <div className="w-full max-w-md">
           <h2 className="text-3xl font-bold text-gray-900 mb-1" style={{ fontFamily: FONT_DISPLAY }}>
-            Sign in
+            {isSignUp ? "Create an Account" : "Sign in"}
           </h2>
-          <p className="text-gray-500 mb-6">Use your SASI college credentials to continue</p>
+          <p className="text-gray-500 mb-5">
+            {isSignUp
+              ? `Register as a ${tab} to get started`
+              : "Use your SASI college credentials to continue"}
+          </p>
 
+          {/* Role selection tab */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl mb-5">
             {["Student", "Admin"].map((t) => (
               <button
@@ -165,36 +204,96 @@ export function LoginPage() {
             ))}
           </div>
 
-          <button
-            onClick={handleSignIn}
-            className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-3 font-medium text-gray-700 hover:bg-gray-50 mb-2"
-          >
-            <GoogleG /> Sign in with Google
-          </button>
-          <p className="text-center text-xs text-gray-400 mb-5">
-            Only <span className="font-semibold text-gray-600">@sasi.ac.in</span> accounts are allowed
-          </p>
+          {!isSignUp && (
+            <>
+              <button
+                onClick={handleSubmit}
+                className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-3 font-medium text-gray-700 hover:bg-gray-50 mb-2"
+              >
+                <GoogleG /> Sign in with Google
+              </button>
+              <p className="text-center text-xs text-gray-400 mb-5">
+                Only <span className="font-semibold text-gray-600">@sasi.ac.in</span> accounts are allowed
+              </p>
 
-          <div className="flex items-center gap-3 mb-5">
-            <div className="h-px bg-gray-200 flex-1" />
-            <span className="text-[11px] tracking-wide text-gray-400 font-medium">
-              {tab === "Student" ? "OR USE ROLL NUMBER" : "OR USE EMAIL / ADMIN ID"}
-            </span>
-            <div className="h-px bg-gray-200 flex-1" />
-          </div>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="h-px bg-gray-200 flex-1" />
+                <span className="text-[11px] tracking-wide text-gray-400 font-medium">
+                  {tab === "Student" ? "OR USE ROLL NUMBER" : "OR USE EMAIL / ADMIN ID"}
+                </span>
+                <div className="h-px bg-gray-200 flex-1" />
+              </div>
+            </>
+          )}
 
-          <label className="text-sm font-semibold text-gray-800">
-            {tab === "Student" ? "Roll Number" : "Email / Admin ID"}
-          </label>
-          <div className="mt-1.5 mb-4 flex items-center gap-2 border border-gray-200 rounded-xl px-3.5 py-3 focus-within:border-gray-400">
-            <Hash size={16} className="text-gray-400" />
-            <input
-              value={roll}
-              onChange={(e) => setRoll(e.target.value)}
-              placeholder={tab === "Student" ? "Enter your roll number (e.g. 21A12A0123)" : "Enter your email or Admin ID"}
-              className="w-full outline-none text-gray-800 bg-transparent placeholder:text-gray-400"
-            />
-          </div>
+          {/* FORM FIELDS */}
+          {isSignUp && (
+            <>
+              <label className="text-sm font-semibold text-gray-800">Full Name</label>
+              <div className="mt-1.5 mb-4 flex items-center gap-2 border border-gray-200 rounded-xl px-3.5 py-3 focus-within:border-gray-400">
+                <User size={16} className="text-gray-400" />
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your full name"
+                  className="w-full outline-none text-gray-800 bg-transparent placeholder:text-gray-400"
+                />
+              </div>
+
+              <label className="text-sm font-semibold text-gray-800">Email Address</label>
+              <div className="mt-1.5 mb-4 flex items-center gap-2 border border-gray-200 rounded-xl px-3.5 py-3 focus-within:border-gray-400">
+                <Mail size={16} className="text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@sasi.ac.in"
+                  className="w-full outline-none text-gray-800 bg-transparent placeholder:text-gray-400"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Identifier field */}
+          {(!isSignUp || tab === "Student") && (
+            <>
+              <label className="text-sm font-semibold text-gray-800">
+                {tab === "Student"
+                  ? "Roll Number"
+                  : isSignUp
+                  ? "Admin ID"
+                  : "Email / Admin ID"}
+              </label>
+              <div className="mt-1.5 mb-4 flex items-center gap-2 border border-gray-200 rounded-xl px-3.5 py-3 focus-within:border-gray-400">
+                <Hash size={16} className="text-gray-400" />
+                <input
+                  value={roll}
+                  onChange={(e) => setRoll(e.target.value)}
+                  placeholder={
+                    tab === "Student"
+                      ? "Enter roll number (e.g. 21A12A0123)"
+                      : "Enter email or Admin ID"
+                  }
+                  className="w-full outline-none text-gray-800 bg-transparent placeholder:text-gray-400"
+                />
+              </div>
+            </>
+          )}
+
+          {isSignUp && tab === "Admin" && (
+            <>
+              <label className="text-sm font-semibold text-gray-800">Admin ID</label>
+              <div className="mt-1.5 mb-4 flex items-center gap-2 border border-gray-200 rounded-xl px-3.5 py-3 focus-within:border-gray-400">
+                <Shield size={16} className="text-gray-400" />
+                <input
+                  value={adminId}
+                  onChange={(e) => setAdminId(e.target.value)}
+                  placeholder="Enter your Admin ID"
+                  className="w-full outline-none text-gray-800 bg-transparent placeholder:text-gray-400"
+                />
+              </div>
+            </>
+          )}
 
           <label className="text-sm font-semibold text-gray-800">Password</label>
           <div className="mt-1.5 mb-6 flex items-center gap-2 border border-gray-200 rounded-xl px-3.5 py-3 focus-within:border-gray-400">
@@ -209,19 +308,35 @@ export function LoginPage() {
           </div>
 
           <button
-            onClick={handleSignIn}
-            className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 font-semibold text-white hover:opacity-90 transition-opacity"
+            onClick={handleSubmit}
+            className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 font-semibold text-white hover:opacity-90 transition-opacity cursor-pointer"
             style={{ background: INK }}
           >
-            Sign In <ArrowRight size={16} />
+            {isSignUp ? "Sign Up" : "Sign In"} <ArrowRight size={16} />
           </button>
 
-          <p className="text-center text-sm text-gray-500 mt-6">
-            Forgot your password?{" "}
-            <span className="font-semibold cursor-pointer" style={{ color: BRAND }}>
-              Contact your department
-            </span>
-          </p>
+          {/* Mode Switcher Footer */}
+          <div className="text-center text-sm text-gray-500 mt-6 flex flex-col gap-2">
+            <div>
+              {isSignUp ? "Already have an account? " : "Don't have an account? "}
+              <button
+                type="button"
+                onClick={() => handleToggleMode(!isSignUp)}
+                className="font-semibold underline cursor-pointer"
+                style={{ color: BRAND }}
+              >
+                {isSignUp ? "Sign In" : "Sign Up"}
+              </button>
+            </div>
+            {!isSignUp && (
+              <div>
+                Forgot your password?{" "}
+                <span className="font-semibold cursor-pointer" style={{ color: BRAND }}>
+                  Contact your department
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
