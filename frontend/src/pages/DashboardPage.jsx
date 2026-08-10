@@ -19,24 +19,33 @@ import axios from "axios";
 export function DashboardPage() {
   const navigate = useNavigate();
   const [student, setStudent] = useState(null);
+  const [progress, setProgress] = useState(null);
 
   useEffect(() => {
-    const fetchStudent = async () => {
+    const fetchData = async () => {
       try {
         const token = localStorage.getItem("token");
-        const response = await axios.get(
-          "http://localhost:3000/api/auth/student/profile",
-          {
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        const [profileRes, progressRes] = await Promise.all([
+          axios.get("http://localhost:3000/api/auth/student/profile", {
             withCredentials: true,
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          }
-        );
+            headers,
+          }),
+          axios.get("http://localhost:3000/api/auth/student/progress", {
+            withCredentials: true,
+            headers,
+          }).catch(() => null),
+        ]);
 
-        console.log("Student:", response.data.student);
-
-        setStudent(response.data.student);
+        if (profileRes?.data?.student) {
+          setStudent(profileRes.data.student);
+        }
+        if (progressRes?.data) {
+          setProgress(progressRes.data);
+        }
       } catch (error) {
-        console.error("Profile error:", error);
+        console.error("Dashboard fetch error:", error);
 
         const localStudent = localStorage.getItem("student");
         if (localStudent) {
@@ -47,7 +56,7 @@ export function DashboardPage() {
       }
     };
 
-    fetchStudent();
+    fetchData();
   }, [navigate]);
 
   const handleStartExam = (id) => {
@@ -112,7 +121,7 @@ export function DashboardPage() {
         />
         <StatCard
           label="Avg Score"
-          value={STATS.avgScore}
+          value={progress ? progress.avgScore : STATS.avgScore}
           delta={STATS.avgDelta}
           icon={<TrendingUp size={17} />}
           iconBg="#DCFCE7"
@@ -120,14 +129,14 @@ export function DashboardPage() {
         />
         <StatCard
           label="Exams Completed"
-          value={STATS.completed}
+          value={progress ? `${progress.examsCompleted}/12` : STATS.completed}
           icon={<FileText size={17} />}
           iconBg="#DBEAFE"
           iconColor="#2563EB"
         />
         <StatCard
           label="Best Score"
-          value={STATS.best}
+          value={progress ? progress.bestScore : STATS.best}
           icon={<Trophy size={17} />}
           iconBg="#FCE7E9"
           iconColor={BRAND}
@@ -177,10 +186,10 @@ export function DashboardPage() {
             Recent Weeks
           </h3>
           <div className="space-y-4">
-            {RECENT_WEEKS.map((w) => (
-              <div key={w.week} className="flex items-center justify-between">
+            {(progress?.recentAttempts?.length ? progress.recentAttempts : RECENT_WEEKS).map((w, idx) => (
+              <div key={w.id || w.week || idx} className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-gray-900">{w.week}</div>
+                  <div className="text-sm font-semibold text-gray-900">{w.title || w.week}</div>
                   <div className="text-xs text-gray-400">{w.marks}</div>
                 </div>
                 <div className="text-right">
@@ -189,7 +198,7 @@ export function DashboardPage() {
                       w.status === "Passed" ? "text-emerald-600" : "text-red-500"
                     }`}
                   >
-                    {w.pct}
+                    {w.score || w.pct}
                   </div>
                   <div
                     className={`text-xs ${
