@@ -1,5 +1,5 @@
 /* =====================================================================
-   DESIGN TOKENS — sampled from Aptitude Portal
+   DESIGN TOKENS — sampled from CampVex Portal
    ===================================================================== */
 export const BRAND = "#930716"; // primary maroon/crimson
 export const BRAND_DARK = "#6e0511";
