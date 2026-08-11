@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, RotateCcw } from "lucide-react";
 import { EXAMS_LIST, QUESTIONS } from "../data/mockData";
 import { INK, FONT_DISPLAY } from "../constants/theme";
+import api from "../api/axios";
 
 export function ExamResultPage() {
   const { examId } = useParams();
@@ -11,18 +12,35 @@ export function ExamResultPage() {
 
   const exam = EXAMS_LIST.find((e) => e.id === Number(examId)) || EXAMS_LIST[0];
 
-  // Default state fallback if user direct navigated
-  const state = location.state || {
-    correct: 6,
-    total: QUESTIONS.length,
-    answeredCount: 7,
-    examTitle: exam.title,
-  };
+  const state = location.state || {};
+  const [resultData, setResultData] = useState({
+    correct: state.correct ?? 6,
+    total: state.total ?? QUESTIONS.length,
+    answeredCount: state.answeredCount ?? 7,
+    percentage: state.percentage ?? Math.round(((state.correct ?? 6) / (state.total ?? QUESTIONS.length)) * 100),
+  });
 
-  const { correct, total, answeredCount } = state;
-  const wrong = answeredCount - correct;
-  const skipped = total - answeredCount;
-  const pct = Math.round((correct / total) * 100);
+  useEffect(() => {
+    if (state.attemptId) {
+      api.get(`/answers/results/${state.attemptId}`)
+        .then((res) => {
+          if (res.data) {
+            setResultData({
+              correct: res.data.correctCount ?? state.correct ?? 0,
+              total: res.data.totalMarks ?? state.total ?? QUESTIONS.length,
+              answeredCount: res.data.answeredCount ?? state.answeredCount ?? 0,
+              percentage: res.data.percentage ?? 0,
+            });
+          }
+        })
+        .catch((err) => console.warn("Could not fetch attempt result from backend:", err));
+    }
+  }, [state.attemptId]);
+
+  const { correct, total, answeredCount, percentage } = resultData;
+  const wrong = Math.max(0, answeredCount - correct);
+  const skipped = Math.max(0, total - answeredCount);
+  const pct = percentage !== undefined ? percentage : Math.round((correct / (total || 1)) * 100);
   const passed = pct >= 40;
 
   return (
@@ -107,7 +125,7 @@ export function ExamResultPage() {
           <ChevronLeft size={16} /> Dashboard
         </button>
         <button
-          onClick={() => navigate(`/exams/${exam.id}/take`)}
+          onClick={() => navigate(`/exams/${examId}/take`)}
           className="flex items-center gap-2 text-white font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity ml-auto shadow-sm"
           style={{ background: INK }}
         >

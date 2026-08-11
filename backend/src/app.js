@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const ExamRouter = require('./routes/Exam.router');
 const AuthRouter = require('./routes/auth.router');
 const AnswerRouter = require('./routes/answer.router');
+const TestManagementRouter = require('./routes/testManagement.router');
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.get('/',(req,res)=>{
 app.use('/api/auth', AuthRouter);
 app.use('/api/exams', ExamRouter);
 app.use('/api/answers', AnswerRouter);
+app.use('/api/test-management', TestManagementRouter);
 
 
 module.exports = app;

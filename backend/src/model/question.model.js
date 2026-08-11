@@ -11,10 +11,14 @@ const optionSchema = new mongoose.Schema({
 
 const questionSchema = new mongoose.Schema({
 
-    exam_id:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"Exam",
-        required:true
+    testId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Test",
+    },
+
+    exam_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Test"
     },
 
     question_text:{
