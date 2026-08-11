@@ -1,18 +1,25 @@
 const { Student: studentModel, Admin: adminModel } = require('../model/user.model');
 const ExamAttempt = require('../model/testModel/testAttempt.model');
+const AuditLog = require('../model/auditLog.model');
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const RegisterStudent = async(req,res) =>{
     try{
-        const {username,rollno,email,password} = req.body;
+        const {username,rollno,email,password,department,batch,section,phone} = req.body;
 
         if (!email || !email.toLowerCase().endsWith("@sasi.ac.in")) {
             return res.status(400).json({ message: 'Only @sasi.ac.in email addresses are allowed' });
         }
 
-        const existingStudent = await studentModel.findOne({$or: [{rollno}, {email}]});
+        const existingStudent = await studentModel.findOne({
+            $or: [
+                { rollNumber: rollno },
+                { rollno: rollno },
+                { email }
+            ]
+        });
 
         if(existingStudent){
             return res.status(400).json({message: 'Student with this roll number or email already exists'});
@@ -26,13 +33,19 @@ const RegisterStudent = async(req,res) =>{
 
         const student = await studentModel.create({
             username,
-            rollno,
+            rollNumber: rollno,
             email,
-            password: hashedPassword
+            passwordHash: hashedPassword,
+            department: department || "",
+            batch: batch || "",
+            section: section || "",
+            phone: phone || "",
+            status: "active"
         });
 
         const studentData = student.toObject();
         delete studentData.password;
+        delete studentData.passwordHash;
 
         res.status(201).json({
             message: 'Student created successfully',
@@ -45,12 +58,21 @@ const RegisterStudent = async(req,res) =>{
 const studentlogin = async(req,res) =>{
     try{
         const {rollno,password} = req.body;
-        const student = await studentModel.findOne({rollno});
+        const student = await studentModel.findOne({
+            $or: [
+                { rollNumber: rollno },
+                { rollno: rollno }
+            ]
+        });
         if(!student){
             return res.status(404).json({message: 'Student not found'});
         }
 
-        const isPasswordValid = await bcrypt.compare(password, student.password);
+        if (student.status !== "active") {
+            return res.status(403).json({message: 'Student account is not active'});
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, student.passwordHash || student.password);
         if(!isPasswordValid){
             return res.status(401).json({message: 'Invalid password'});
         }
@@ -73,6 +95,7 @@ const studentlogin = async(req,res) =>{
 
         const studentData = student.toObject();
         delete studentData.password;
+        delete studentData.passwordHash;
 
         res.status(200).json({
             message: 'Student logged in successfully',
@@ -85,7 +108,7 @@ const studentlogin = async(req,res) =>{
 }
 const adminregister = async(req,res) =>{
     try{
-        const {username,email,adminid,password} = req.body;
+        const {username,email,adminid,password,phone} = req.body;
 
         if (!email || !email.toLowerCase().endsWith("@sasi.ac.in")) {
             return res.status(400).json({ message: 'Only @sasi.ac.in email addresses are allowed' });
@@ -107,11 +130,22 @@ const adminregister = async(req,res) =>{
             username,
             email,
             adminid,
-            password: hashedPassword
+            passwordHash: hashedPassword,
+            phone: phone || "",
+            status: "active"
+        });
+
+        // Record Audit Log for Admin Registration
+        await AuditLog.create({
+            adminId: admin._id,
+            action: 'ADMIN_REGISTER',
+            entityType: 'Admin',
+            entityId: admin._id.toString()
         });
 
         const adminData = admin.toObject();
         delete adminData.password;
+        delete adminData.passwordHash;
 
         res.status(201).json({
             message: 'Admin created successfully',
@@ -130,10 +164,26 @@ const adminlogin = async(req,res) =>{
             return res.status(404).json({message: 'Admin not found'});
         }
 
-        const isPasswordValid = await bcrypt.compare(password, admin.password);
+        if (admin.status !== "active") {
+            return res.status(403).json({message: 'Admin account is not active'});
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, admin.passwordHash || admin.password);
         if(!isPasswordValid){
             return res.status(401).json({message: 'Invalid password'});
         }
+
+        // Update last login timestamp
+        admin.lastLoginAt = new Date();
+        await admin.save();
+
+        // Record Audit Log for Admin Login
+        await AuditLog.create({
+            adminId: admin._id,
+            action: 'ADMIN_LOGIN',
+            entityType: 'Admin',
+            entityId: admin._id.toString()
+        });
 
         const token = jwt.sign(
             {
@@ -154,6 +204,7 @@ const adminlogin = async(req,res) =>{
 
         const adminData = admin.toObject();
         delete adminData.password;
+        delete adminData.passwordHash;
 
         res.status(200).json({
             message: 'Admin logged in successfully',
