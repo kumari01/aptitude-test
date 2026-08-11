@@ -20,7 +20,29 @@ const studentSchema = new mongoose.Schema({
     password:{
         type: String,
         required: true,
+    },
+    department: {
+        type: String,
+        default: ""
+    },
+    batch: {
+        type: String,
+        default: ""
+    },
+    section: {
+        type: String,
+        default: ""
+    },
+    status: {
+        type: String,
+        default: "active"
+    },
+    phone: {
+        type: String,
+        default: ""
     }
+}, {
+    timestamps: true
 });
 
 const adminSchema = new mongoose.Schema({
@@ -42,7 +64,20 @@ const adminSchema = new mongoose.Schema({
     password:{
         type: String,
         required: true,
+    },
+    phone: {
+        type: String,
+        default: ""
+    },
+    status: {
+        type: String,
+        default: "active"
+    },
+    lastLoginAt: {
+        type: Date
     }
+}, {
+    timestamps: true
 });
 
 const Student = mongoose.model('Student', studentSchema);
