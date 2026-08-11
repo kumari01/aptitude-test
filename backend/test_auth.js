@@ -26,7 +26,7 @@ async function runAuthTests() {
     const testUser = {
       username: `testuser_${randId}`,
       rollno: validRollNo,
-      email: `student_${randId}@example.com`,
+      email: `student_${randId}@sasi.ac.in`,
       password: "SecurePassword123!"
     };
 
@@ -45,7 +45,7 @@ async function runAuthTests() {
 
     // Test 1: Student Signup - Success
     console.log("--- 1. Testing Student Signup (Success Case) ---");
-    const signupRes = await fetch(`${baseUrl}/api/auth/signup`, {
+    const signupRes = await fetch(`${baseUrl}/api/auth/student/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(testUser)
@@ -61,13 +61,13 @@ async function runAuthTests() {
 
     // Test 2: Student Signup - Invalid Roll Number Format
     console.log("\n--- 2. Testing Student Signup (Invalid Roll Number Format) ---");
-    const invalidRollRes = await fetch(`${baseUrl}/api/auth/signup`, {
+    const invalidRollRes = await fetch(`${baseUrl}/api/auth/student/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: "invalidroll",
         rollno: "INVALID_ROLL_123",
-        email: `invalidroll_${randId}@example.com`,
+        email: `invalidroll_${randId}@sasi.ac.in`,
         password: "Password123!"
       })
     });
@@ -82,7 +82,7 @@ async function runAuthTests() {
 
     // Test 3: Student Signup - Missing Password
     console.log("\n--- 3. Testing Student Signup (Missing Password) ---");
-    const noPassRes = await fetch(`${baseUrl}/api/auth/signup`, {
+    const noPassRes = await fetch(`${baseUrl}/api/auth/student/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -102,7 +102,7 @@ async function runAuthTests() {
 
     // Test 4: Student Signup - Duplicate Roll No
     console.log("\n--- 4. Testing Student Signup (Duplicate Roll No) ---");
-    const dupRes = await fetch(`${baseUrl}/api/auth/signup`, {
+    const dupRes = await fetch(`${baseUrl}/api/auth/student/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -123,7 +123,7 @@ async function runAuthTests() {
 
     // Test 5: Student Login - Success
     console.log("\n--- 5. Testing Student Login (Success Case) ---");
-    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+    const loginRes = await fetch(`${baseUrl}/api/auth/student/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -142,7 +142,7 @@ async function runAuthTests() {
 
     // Test 6: Student Login - Incorrect Password
     console.log("\n--- 6. Testing Student Login (Invalid Password) ---");
-    const wrongPassRes = await fetch(`${baseUrl}/api/auth/login`, {
+    const wrongPassRes = await fetch(`${baseUrl}/api/auth/student/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -161,7 +161,7 @@ async function runAuthTests() {
 
     // Test 7: Student Login - Non-existent Roll No
     console.log("\n--- 7. Testing Student Login (User Not Found) ---");
-    const notFoundRes = await fetch(`${baseUrl}/api/auth/login`, {
+    const notFoundRes = await fetch(`${baseUrl}/api/auth/student/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
