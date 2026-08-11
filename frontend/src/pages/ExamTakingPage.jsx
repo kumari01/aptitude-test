@@ -1,32 +1,127 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Clock, Flag, ChevronLeft, ChevronRight } from "lucide-react";
-import { EXAMS_LIST, QUESTIONS } from "../data/mockData";
+import { Clock, Flag, ChevronLeft, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
+import { EXAMS_LIST, QUESTIONS as MOCK_QUESTIONS } from "../data/mockData";
 import { formatTime } from "../utils/formatters";
 import { BRAND, BRAND_TINT, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
+import api from "../api/axios";
 
 export function ExamTakingPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
 
-  const exam = EXAMS_LIST.find((e) => e.id === Number(examId)) || EXAMS_LIST[0];
+  const fallbackExam = EXAMS_LIST.find((e) => e.id === Number(examId)) || EXAMS_LIST[0];
 
+  const [exam, setExam] = useState(fallbackExam);
+  const [questions, setQuestions] = useState(MOCK_QUESTIONS);
+  const [attemptId, setAttemptId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [seconds, setSeconds] = useState(exam.minutes * 60);
+  const [seconds, setSeconds] = useState(fallbackExam.minutes * 60);
   const timerRef = useRef(null);
 
-  const finishExam = () => {
+  // Initialize test attempt from API
+  useEffect(() => {
+    async function initExam() {
+      try {
+        setLoading(true);
+        const res = await api.post(`/exams/${examId}/start`);
+        if (res.data) {
+          const { attempt, exam: examData, questions: qData } = res.data;
+          if (attempt?._id) setAttemptId(attempt._id);
+          if (examData?.title) {
+            setExam({
+              id: examData._id,
+              title: examData.title,
+              minutes: examData.duration_minutes || 30,
+              totalMarks: examData.total_marks || 10,
+            });
+          }
+          if (qData && qData.length > 0) {
+            const formatted = qData.map((q) => ({
+              id: q._id,
+              q: q.question_text,
+              options: q.options.map((opt) => opt.text || opt),
+              rawOptions: q.options,
+              marks: q.marks || 1,
+            }));
+            setQuestions(formatted);
+          }
+
+          // Calculate remaining duration based on start time
+          if (attempt?.started_at && examData?.duration_minutes) {
+            const startTime = new Date(attempt.started_at).getTime();
+            const totalDurationMs = (examData.duration_minutes || 30) * 60 * 1000;
+            const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+            const remaining = Math.max(0, Math.floor(totalDurationMs / 1000) - elapsedSeconds);
+            setSeconds(remaining);
+          }
+
+          // Fetch pre-saved answers if resuming attempt
+          if (attempt?._id) {
+            try {
+              const answersRes = await api.get(`/answers/attempt/${attempt._id}`);
+              if (answersRes.data?.answers) {
+                const loadedAnswers = {};
+                answersRes.data.answers.forEach((ans) => {
+                  const qIdx = qData.findIndex((q) => q._id === ans.question_id);
+                  if (qIdx !== -1) {
+                    const optIdx = qData[qIdx].options.findIndex(
+                      (o) => (o._id ? o._id.toString() : o) === ans.selected_option_id
+                    );
+                    if (optIdx !== -1) loadedAnswers[qIdx] = optIdx;
+                  }
+                });
+                setAnswers(loadedAnswers);
+              }
+            } catch (err) {
+              console.warn("Could not load saved answers:", err);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Using local mock test session fallback:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    initExam();
+  }, [examId]);
+
+  const finishExam = async () => {
+    if (submitting) return;
+    setSubmitting(true);
     if (timerRef.current) clearInterval(timerRef.current);
+
+    let submitResult = null;
+    if (attemptId) {
+      try {
+        const res = await api.post("/answers/submit", { attemptId });
+        submitResult = res.data;
+      } catch (err) {
+        console.warn("Backend submit error, using client calculation:", err);
+      }
+    }
+
     let correct = 0;
-    QUESTIONS.forEach((q, i) => {
+    questions.forEach((q, i) => {
       if (answers[i] === q.answer) correct += 1;
     });
     const answeredCount = Object.keys(answers).length;
 
-    // Navigate to result route with state
-    navigate(`/exams/${exam.id}/result`, {
-      state: { correct, total: QUESTIONS.length, answeredCount, examTitle: exam.title },
+    navigate(`/exams/${examId}/result`, {
+      state: {
+        attemptId,
+        correct: submitResult?.correctCount ?? correct,
+        total: submitResult?.totalMarks ?? questions.length,
+        answeredCount: submitResult?.answeredCount ?? answeredCount,
+        score: submitResult?.score,
+        percentage: submitResult?.percentage,
+        examTitle: exam.title,
+      },
     });
   };
 
@@ -44,18 +139,41 @@ export function ExamTakingPage() {
   }, []);
 
   useEffect(() => {
-    if (seconds === 0) finishExam();
+    if (seconds === 0 && !loading) finishExam();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seconds]);
+  }, [seconds, loading]);
 
   const answeredCount = Object.keys(answers).length;
-  const isLast = current === QUESTIONS.length - 1;
+  const isLast = current === questions.length - 1;
 
-  function selectOption(qIndex, optIndex) {
+  async function selectOption(qIndex, optIndex) {
     setAnswers((prev) => ({ ...prev, [qIndex]: optIndex }));
+
+    // Save answer to backend if attemptId is present
+    const qObj = questions[qIndex];
+    if (attemptId && qObj?.id && qObj?.rawOptions?.[optIndex]?._id) {
+      try {
+        await api.post("/answers/save", {
+          attemptId,
+          questionId: qObj.id,
+          selectedOptionId: qObj.rawOptions[optIndex]._id,
+        });
+      } catch (err) {
+        console.warn("Failed to persist student answer to backend:", err);
+      }
+    }
   }
 
-  const q = QUESTIONS[current];
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <Loader2 className="animate-spin text-indigo-600 mb-3" size={36} />
+        <p className="text-gray-600 font-medium">Preparing test environment...</p>
+      </div>
+    );
+  }
+
+  const q = questions[current] || questions[0];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col" style={{ fontFamily: FONT_BODY }}>
@@ -66,7 +184,7 @@ export function ExamTakingPage() {
             {exam.title}
           </div>
           <div className="text-xs text-gray-400">
-            Question {current + 1} of {QUESTIONS.length}
+            Question {current + 1} of {questions.length}
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -75,10 +193,11 @@ export function ExamTakingPage() {
           </div>
           <button
             onClick={finishExam}
-            className="flex items-center gap-1.5 text-white font-semibold px-5 py-2 rounded-full hover:opacity-90 transition-opacity"
+            disabled={submitting}
+            className="flex items-center gap-1.5 text-white font-semibold px-5 py-2 rounded-full hover:opacity-90 transition-opacity disabled:opacity-50"
             style={{ background: BRAND }}
           >
-            Submit <Flag size={14} />
+            {submitting ? "Submitting..." : "Submit"} <Flag size={14} />
           </button>
         </div>
       </div>
@@ -133,14 +252,15 @@ export function ExamTakingPage() {
             {isLast ? (
               <button
                 onClick={finishExam}
-                className="flex items-center gap-1.5 text-white font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity"
+                disabled={submitting}
+                className="flex items-center gap-1.5 text-white font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
                 style={{ background: BRAND }}
               >
-                Finish Exam <Flag size={15} />
+                {submitting ? "Submitting..." : "Finish Exam"} <Flag size={15} />
               </button>
             ) : (
               <button
-                onClick={() => setCurrent((c) => Math.min(QUESTIONS.length - 1, c + 1))}
+                onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
                 className="flex items-center gap-1.5 text-white font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity"
                 style={{ background: INK }}
               >
@@ -155,7 +275,7 @@ export function ExamTakingPage() {
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h3 className="font-bold text-gray-900 mb-4">Questions</h3>
             <div className="grid grid-cols-5 gap-2 mb-4">
-              {QUESTIONS.map((_, i) => {
+              {questions.map((_, i) => {
                 const isAnswered = answers[i] !== undefined;
                 const isCurrent = i === current;
                 return (
@@ -179,9 +299,6 @@ export function ExamTakingPage() {
                 <span className="w-2.5 h-2.5 rounded-full" style={{ background: BRAND }} /> Answered
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-300" /> Skipped
-              </div>
-              <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-gray-200" /> Unanswered
               </div>
             </div>
@@ -192,18 +309,18 @@ export function ExamTakingPage() {
             <div className="flex items-center justify-between text-sm mb-1">
               <span className="text-gray-500">Answered</span>
               <span className="font-semibold text-gray-900">
-                {answeredCount}/{QUESTIONS.length}
+                {answeredCount}/{questions.length}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm mb-3">
               <span className="text-gray-500">Remaining</span>
-              <span className="font-semibold text-gray-900">{QUESTIONS.length - answeredCount}</span>
+              <span className="font-semibold text-gray-900">{questions.length - answeredCount}</span>
             </div>
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{
-                  width: `${(answeredCount / QUESTIONS.length) * 100}%`,
+                  width: `${(answeredCount / (questions.length || 1)) * 100}%`,
                   background: BRAND,
                 }}
               />

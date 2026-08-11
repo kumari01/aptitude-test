@@ -1,6 +1,7 @@
 const studentAnswerSchema = require("../model/studentAnswer.model");
-const ExamAttempt = require("../model/examAttempt_model");
+const ExamAttempt = require("../model/testModel/testAttempt.model");
 const questionModel = require("../model/question.model");
+const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
 
 // Save or update student answer
 const saveStudentAnswer = async (req, res) => {
@@ -29,15 +30,19 @@ const saveStudentAnswer = async (req, res) => {
         }
 
         // Check if question exists
-        const question = await questionModel.findById(questionId);
+        let question = await questionModel.findById(questionId);
+        if (!question) {
+            question = await SectionQuestion.findById(questionId);
+        }
         if (!question) {
             return res.status(404).json({
                 message: 'Question not found'
             });
         }
 
-        // Check if question belongs to the exam attempt
-        if (question.exam_id.toString() !== attempt.exam_id.toString()) {
+        const targetTestId = attempt.testId || attempt.exam_id;
+        const questionTestId = question.testId || question.exam_id;
+        if (targetTestId && questionTestId && questionTestId.toString() !== targetTestId.toString()) {
             return res.status(400).json({
                 message: 'Question does not belong to this exam attempt'
             });
@@ -103,14 +108,17 @@ const submitExam = async (req, res) => {
             return res.status(400).json({ message: 'Attempt has already been submitted' });
         }
 
-        const questions = await questionModel.find({ exam_id: attempt.exam_id });
+        const targetTestId = attempt.testId || attempt.exam_id;
+        const questions = await questionModel.find({
+            $or: [{ testId: targetTestId }, { exam_id: targetTestId }]
+        });
         const answers = await studentAnswerSchema.find({ attempt_id: attemptId });
 
         let totalScore = 0;
         let totalPossibleMarks = 0;
 
         for (const question of questions) {
-            const qMarks = question.marks || 1;
+            const qMarks = 1; // 1 point per question
             totalPossibleMarks += qMarks;
 
             const studentAns = answers.find(a => a.question_id.toString() === question._id.toString());
@@ -153,14 +161,40 @@ const getResults = async (req, res) => {
             return res.status(404).json({ message: 'Attempt not found' });
         }
 
-        const questions = await questionModel.find({ exam_id: attempt.exam_id });
-        const totalMarks = questions.reduce((sum, q) => sum + (q.marks || 1), 0);
+        const targetTestId = attempt.testId || attempt.exam_id;
+        const questions = await questionModel.find({
+            $or: [{ testId: targetTestId }, { exam_id: targetTestId }]
+        });
+        const answers = await studentAnswerSchema.find({ attempt_id: attemptId });
+
+        const totalMarks = questions.length; // 1 point per question
+        let correctCount = 0;
+        let wrongCount = 0;
+
+        for (const question of questions) {
+            const ans = answers.find(a => a.question_id.toString() === question._id.toString());
+            if (ans && ans.selected_option_id) {
+                if (question.correct_option_id && question.correct_option_id.toString() === ans.selected_option_id.toString()) {
+                    correctCount++;
+                } else {
+                    wrongCount++;
+                }
+            }
+        }
+
+        const answeredCount = answers.filter(a => a.selected_option_id).length;
+        const percentage = totalMarks > 0 ? Math.round((attempt.score / totalMarks) * 100) : 0;
 
         res.status(200).json({
             attemptId: attempt._id,
             status: attempt.status,
             score: attempt.score,
             totalMarks,
+            totalQuestions: questions.length,
+            answeredCount,
+            correctCount,
+            wrongCount,
+            percentage,
             startedAt: attempt.started_at,
             submittedAt: attempt.submitted_at
         });

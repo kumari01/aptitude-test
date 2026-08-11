@@ -21,10 +21,11 @@ const createQuestion = async(req,res) =>{
         }
 
         const question = new questionModel({
+            testId: examId,
             exam_id: examId,
             question_text,
             options,
-            marks: marks !== undefined ? Number(marks) : 1
+            marks: 1
         });
 
         question.correct_option_id = question.options[answerIndex]._id;
@@ -46,7 +47,7 @@ const getQuestions = async(req,res)=>{
         //retrieve all questions for a specific exam
         const examId = req.params.examId || req.query?.exam_id || req.body?.exam_id;
         const questions = await questionModel.find(
-            { exam_id: examId },
+            { $or: [{ testId: examId }, { exam_id: examId }] },
             {
                 correct_option_id: 0,
                 __v: 0

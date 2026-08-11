@@ -1,5 +1,5 @@
 const { Student: studentModel, Admin: adminModel } = require('../model/user.model');
-const ExamAttempt = require('../model/examAttempt_model');
+const ExamAttempt = require('../model/testModel/testAttempt.model');
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
