@@ -11,17 +11,44 @@ const studentSchema = new mongoose.Schema({
         unique:true,
         match: [/@sasi\.ac\.in$/, "Only @sasi.ac.in emails are allowed"]
     },
-    rollno:{
+    rollNumber:{
         type: String,
         required:true,
         unique:true,
+        alias: 'rollno',
         match: [/^\d{2}[A-Za-z]\d{2}[A-Za-z]\d{2}[A-Za-z0-9]{2}$/, "incorrect roll number format"]    
     },
-    password:{
+    passwordHash:{
         type: String,
         required:true,
+        alias: 'password'
+    },
+    department: {
+        type: String,
+        default: ""
+    },
+    batch: {
+        type: String,
+        default: ""
+    },
+    section: {
+        type: String,
+        default: ""
+    },
+    status: {
+        type: String,
+        default: "active"
+    },
+    phone: {
+        type: String,
+        default: ""
     }
-})
+}, {
+    timestamps: true,
+    toJSON: { virtuals: true, getters: true },
+    toObject: { virtuals: true, getters: true }
+});
+
 const adminSchema = new mongoose.Schema({
     username:{
         type: String,
@@ -38,12 +65,29 @@ const adminSchema = new mongoose.Schema({
         required:true,
         unique:true
     },
-    password:{
+    passwordHash:{
         type: String,
         required:true,
+        alias: 'password'
+    },
+    phone: {
+        type: String,
+        default: ""
+    },
+    status: {
+        type: String,
+        default: "active"
+    },
+    lastLoginAt: {
+        type: Date
     }
-})
+}, {
+    timestamps: true,
+    toJSON: { virtuals: true, getters: true },
+    toObject: { virtuals: true, getters: true }
+});
+
 const Student = mongoose.model('Student', studentSchema);
 const Admin = mongoose.model('Admin', adminSchema);
 
-module.exports = { Student, Admin };
+module.exports = { Student, Admin };
