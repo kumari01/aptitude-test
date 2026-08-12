@@ -4,7 +4,7 @@ const proctoringSessionSchema = new mongoose.Schema(
   {
     attemptId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Attempt",
+      ref: "TestAttempt",
       unique: true,
       sparse: true,
     },
