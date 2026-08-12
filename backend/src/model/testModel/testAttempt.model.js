@@ -1,61 +1,83 @@
 const mongoose = require("mongoose");
 
-const testAttemptSchema = new mongoose.Schema({
+const testAttemptSchema = new mongoose.Schema(
+  {
     testId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Test",
-        required: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Test",
+      required: true,
     },
+
     scheduleId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "TestSchedule"
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TestSchedule",
     },
+
     assignmentId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "TestAssignment"
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TestAssignment",
     },
+
     rollNumber: {
-        type: String,
-        trim: true
+      type: String,
+      trim: true,
     },
-    student_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Student"
+
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Student",
     },
-    exam_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Test"
-    },
+
     attemptNumber: {
-        type: Number,
-        default: 1
+      type: Number,
+      default: 1,
+      min: 1,
     },
-    started_at: {
-        type: Date,
-        default: Date.now
+
+    startedAt: {
+      type: Date,
+      default: Date.now,
     },
-    submitted_at: {
-        type: Date
+
+    submittedAt: {
+      type: Date,
     },
+
     score: {
-        type: Number,
-        default: 0
+      type: Number,
+      default: 0,
     },
+
     obtainedMarks: {
-        type: Number,
-        default: 0
+      type: Number,
+      default: 0,
     },
+
     status: {
-        type: String,
-        enum: ["Started", "Submitted", "Time Expired"],
-        default: "Started"
+      type: String,
+      enum: [
+        "STARTED",
+        "SUBMITTED",
+        "TIME_EXPIRED",
+        "AUTO_SUBMITTED",
+        "DISQUALIFIED",
+      ],
+      default: "STARTED",
     },
-    tab_switches: {
-        type: Number,
-        default: 0
-    }
-}, {
-    timestamps: true
+  },
+  {
+    timestamps: true,
+  }
+);
+
+testAttemptSchema.index({
+  studentId: 1,
+  testId: 1,
 });
 
-module.exports = mongoose.model("TestAttempt", testAttemptSchema);
+testAttemptSchema.index({
+  testId: 1,
+  status: 1,
+});
+
+module.exports = mongoose.model("TestAttempt",testAttemptSchema);

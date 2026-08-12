@@ -1,25 +1,25 @@
 const mongoose = require("mongoose");
 
 const studentAnswer =  new mongoose.Schema({
-    attempt_id: {
+    attemptId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "ExamAttempt",
         required: true
     },
-    question_id: {
+    questionId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Question",
         required: true
     },
-    selected_option_id: {
+    selectedOptionId: {
         type: mongoose.Schema.Types.ObjectId,
         required: true
     },
-    is_correct: {
+    isIorrect: {
         type: Boolean,
         default: false
     },
-    marks_awarded: {
+    marksAwarded: {
         type: Number,
         default: 0
     }
