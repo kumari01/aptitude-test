@@ -7,6 +7,7 @@ const ExamRouter = require('./routes/Exam.router');
 const AuthRouter = require('./routes/auth.router');
 const AnswerRouter = require('./routes/answer.router');
 const TestManagementRouter = require('./routes/testManagement.router');
+const LeaderboardRouter = require('./routes/leaderboard.router');
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use('/api/auth', AuthRouter);
 app.use('/api/exams', ExamRouter);
 app.use('/api/answers', AnswerRouter);
 app.use('/api/test-management', TestManagementRouter);
+app.use('/api/leaderboard', LeaderboardRouter);
 
 
 module.exports = app;
