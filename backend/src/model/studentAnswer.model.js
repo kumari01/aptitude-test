@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const studentAnswer =  new mongoose.Schema({
     attempt_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "ExamAttempt",
+        ref: "TestAttempt",
         required: true
     },
     question_id: {

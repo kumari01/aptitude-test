@@ -2,6 +2,9 @@ const studentAnswerSchema = require("../model/studentAnswer.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
 const questionModel = require("../model/question.model");
 const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
+const {
+    generateLeaderboard
+} = require("./leaderboard.controller");
 
 // Save or update student answer
 const saveStudentAnswer = async (req, res) => {
@@ -138,6 +141,7 @@ const submitExam = async (req, res) => {
         attempt.status = 'Submitted';
         attempt.submitted_at = new Date();
         await attempt.save();
+        await generateLeaderboard(attempt.exam_id);
 
         res.status(200).json({
             message: 'Exam submitted successfully',
