@@ -3,6 +3,9 @@ const ExamAttempt = require("../model/testModel/testAttempt.model");
 const questionModel = require("../model/question.model");
 const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
 const submitAttempt = require('../services/attempt.service');
+const {
+    generateLeaderboard
+} = require("./leaderboard.controller");
 
 // Save or update student answer
 const saveStudentAnswer = async (req, res) => {
@@ -108,13 +111,15 @@ const submitExam = async (req, res) => {
             "Submitted"
         );
 
+        // Update leaderboard after successful submission
+        await generateLeaderboard(result.attempt.exam_id);
+
         return res.status(200).json({
             message: "Exam submitted successfully",
             score: result.score,
             totalMarks: result.totalMarks,
             attempt: result.attempt
         });
-
     } catch (err) {
         console.error("Error submitting exam:", err);
 
