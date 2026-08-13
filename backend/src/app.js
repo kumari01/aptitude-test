@@ -9,6 +9,7 @@ const AnswerRouter = require('./routes/answer.router');
 const TestManagementRouter = require('./routes/testManagement.router');
 const ProctoringEventRoute = require('./routes/proctoringEvent.route');
 const proctoringSessionRoutes = require("./routes/proctoringSession.route");
+const LeaderboardRouter = require('./routes/leaderboard.router');
 
 const app = express();
 
@@ -32,5 +33,6 @@ app.use('/api/answers', AnswerRouter);
 app.use('/api/test-management', TestManagementRouter);
 app.use("/api/v1/proctoring",proctoringSessionRoutes);
 app.use("/api/v1/proctoring",ProctoringEventRoute);
+app.use('/api/leaderboard', LeaderboardRouter);
 
 module.exports = app;

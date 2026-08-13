@@ -1,6 +1,5 @@
 const { Student: studentModel, Admin: adminModel } = require('../model/user.model');
 const ExamAttempt = require('../model/testModel/testAttempt.model');
-const AuditLog = require('../model/auditLog.model');
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -15,9 +14,8 @@ const RegisterStudent = async(req,res) =>{
 
         const existingStudent = await studentModel.findOne({
             $or: [
-                { rollNumber: rollno },
                 { rollno: rollno },
-                { email }
+                { email },
             ]
         });
 
@@ -33,9 +31,9 @@ const RegisterStudent = async(req,res) =>{
 
         const student = await studentModel.create({
             username,
-            rollNumber: rollno,
+            rollno,
             email,
-            passwordHash: hashedPassword,
+            password: hashedPassword,
             department: department || "",
             batch: batch || "",
             section: section || "",
@@ -130,17 +128,9 @@ const adminregister = async(req,res) =>{
             username,
             email,
             adminid,
-            passwordHash: hashedPassword,
+            password: hashedPassword,
             phone: phone || "",
             status: "active"
-        });
-
-        // Record Audit Log for Admin Registration
-        await AuditLog.create({
-            adminId: admin._id,
-            action: 'ADMIN_REGISTER',
-            entityType: 'Admin',
-            entityId: admin._id.toString()
         });
 
         const adminData = admin.toObject();
@@ -176,14 +166,6 @@ const adminlogin = async(req,res) =>{
         // Update last login timestamp
         admin.lastLoginAt = new Date();
         await admin.save();
-
-        // Record Audit Log for Admin Login
-        await AuditLog.create({
-            adminId: admin._id,
-            action: 'ADMIN_LOGIN',
-            entityType: 'Admin',
-            entityId: admin._id.toString()
-        });
 
         const token = jwt.sign(
             {
