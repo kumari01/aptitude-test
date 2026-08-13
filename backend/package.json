@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "main": "sever.js",
   "scripts": {
-    "start": "nodemon server.js",
-    "dev": "nodemon server.js",
-    "test": "node test_all_routes.js"
+    "start": "nodemon sever.js",
+    "test": "node test_auth.js"
   },
   "keywords": [],
   "author": "",

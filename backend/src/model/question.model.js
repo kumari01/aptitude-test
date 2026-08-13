@@ -15,11 +15,6 @@ const optionSchema = new mongoose.Schema(
 
 const questionSchema = new mongoose.Schema(
     {
-        testId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Test"
-        },
-
         topicId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Topic",
