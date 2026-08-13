@@ -14,17 +14,13 @@ const testAttemptSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "TestAssignment"
     },
-    rollNumber: {
+    rollno: {
         type: String,
         trim: true
     },
     student_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Student"
-    },
-    exam_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Test"
     },
     attemptNumber: {
         type: Number,

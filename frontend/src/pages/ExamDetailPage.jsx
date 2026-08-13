@@ -25,7 +25,7 @@ export function ExamDetailPage() {
             id: testData._id,
             title: testData.title,
             category: testData.testType || "Aptitude",
-            minutes: 20,
+            minutes: testData.duration_minutes || 30,
             totalMarks: testData.totalMarks || 10,
           });
           if (setObj) setSetting(setObj);

@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const leaderboardSchema = new mongoose.Schema(
     {
-        exam_id: {
+        testId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Test",
             required: true
@@ -26,13 +26,11 @@ const leaderboardSchema = new mongoose.Schema(
             required: true,
             default: 0
         },
-
         percentage: {
             type: Number,
             required: true,
             default: 0
         },
-
         rank: {
             type: Number,
             required: true
@@ -45,7 +43,7 @@ const leaderboardSchema = new mongoose.Schema(
 
 // Quickly get leaderboard for an exam
 leaderboardSchema.index({
-    exam_id: 1,
+    testId: 1,
     rank: 1
 });
 

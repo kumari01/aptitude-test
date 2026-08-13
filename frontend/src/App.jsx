@@ -9,6 +9,7 @@ import ExamTakingPage from "./pages/ExamTakingPage";
 import ExamResultPage from "./pages/ExamResultPage";
 import ResultsPage from "./pages/ResultsPage";
 import ProfilePage from "./pages/ProfilePage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       <Route element={<MainLayout />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/admin" element={<AdminDashboardPage />} />
         <Route path="/exams" element={<ExamsPage />} />
         <Route path="/exams/:examId" element={<ExamDetailPage />} />
         <Route path="/results" element={<ResultsPage />} />

@@ -23,6 +23,9 @@ export function TopBar() {
 
   useEffect(() => {
     const fetchUserProfile = async () => {
+      const savedAdmin = localStorage.getItem("admin");
+      if (savedAdmin) return;
+
       try {
         const token = localStorage.getItem("token");
         const response = await axios.get(

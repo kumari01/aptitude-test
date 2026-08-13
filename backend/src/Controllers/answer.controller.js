@@ -1,10 +1,62 @@
 const studentAnswerSchema = require("../model/studentAnswer.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
+const Test = require("../model/testModel/test.model");
 const questionModel = require("../model/question.model");
-const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
+const { checkAttemptTiming } = require("../utils/timeHelper");
+const { getTestQuestions } = require("../utils/questionservice");
+const { isAttemptOwner } = require("../utils/attemptAuth");
 const {
     generateLeaderboard
 } = require("./leaderboard.controller");
+
+// Helper to grade all saved answers and mark attempt as Submitted / Time Expired
+const gradeAndSubmitAttempt = async (attempt, statusReason = 'Submitted') => {
+    if (attempt.status === 'Submitted' || attempt.status === 'Time Expired') {
+        return { attempt, score: attempt.score, totalMarks: 0 };
+    }
+
+    const targetTestId = attempt.testId;
+    // Uses the same section-aware resolver the student saw when taking the
+    // exam (including section-level marks overrides), so grading can never
+    // drift from what was actually shown on screen.
+    const questions = await getTestQuestions(targetTestId, { includeAnswerKey: true });
+    const answers = await studentAnswerSchema.find({ attempt_id: attempt._id });
+
+    let totalScore = 0;
+    let totalPossibleMarks = 0;
+
+    for (const question of questions) {
+        const qMarks = (question && typeof question.marks === 'number') ? question.marks : 1;
+        totalPossibleMarks += qMarks;
+
+        const studentAns = answers.find(a => a.question_id.toString() === question._id.toString());
+        if (studentAns) {
+            const isCorrect = checkIsCorrect(question, studentAns.selected_option_id);
+            studentAns.is_correct = isCorrect;
+            studentAns.marks_awarded = isCorrect ? qMarks : 0;
+            await studentAns.save();
+
+            if (isCorrect) {
+                totalScore += qMarks;
+            }
+        }
+    }
+
+    attempt.score = totalScore;
+    attempt.status = statusReason;
+    attempt.submitted_at = attempt.submitted_at || new Date();
+    await attempt.save();
+
+    if (attempt.testId) {
+        await generateLeaderboard(attempt.testId);
+    }
+
+    return {
+        attempt,
+        score: totalScore,
+        totalMarks: totalPossibleMarks
+    };
+};
 
 // Save or update student answer
 const saveStudentAnswer = async (req, res) => {
@@ -25,6 +77,13 @@ const saveStudentAnswer = async (req, res) => {
             });
         }
 
+        // Confirm the authenticated student actually owns this attempt
+        if (!isAttemptOwner(attempt, req)) {
+            return res.status(403).json({
+                message: 'This attempt does not belong to you'
+            });
+        }
+
         // Check if attempt is active
         if (attempt.status === 'Submitted' || attempt.status === 'Time Expired') {
             return res.status(400).json({
@@ -32,19 +91,30 @@ const saveStudentAnswer = async (req, res) => {
             });
         }
 
-        // Check if question exists
-        let question = await questionModel.findById(questionId);
-        if (!question) {
-            question = await SectionQuestion.findById(questionId);
+        // Check time expiry via centralized helper
+        const test = await Test.findById(attempt.testId);
+        const { isExpired } = checkAttemptTiming(attempt, test?.duration_minutes);
+
+        if (isExpired) {
+            const result = await gradeAndSubmitAttempt(attempt, 'Time Expired');
+            return res.status(400).json({
+                message: 'Exam duration has expired. Test auto-submitted.',
+                isTimeExpired: true,
+                attempt: result.attempt,
+                score: result.score
+            });
         }
+
+        // Check if question exists and belongs to this exam
+        const question = await questionModel.findById(questionId);
         if (!question) {
             return res.status(404).json({
                 message: 'Question not found'
             });
         }
 
-        const targetTestId = attempt.testId || attempt.exam_id;
-        const questionTestId = question.testId || question.exam_id;
+        const targetTestId = attempt.testId;
+        const questionTestId = question.testId;
         if (targetTestId && questionTestId && questionTestId.toString() !== targetTestId.toString()) {
             return res.status(400).json({
                 message: 'Question does not belong to this exam attempt'
@@ -52,7 +122,8 @@ const saveStudentAnswer = async (req, res) => {
         }
 
         // Check if selected option is valid for this question
-        const optionExists = question.options.some(option => option._id.toString() === selectedOptionId);
+        const optionExists = Array.isArray(question.options) &&
+            question.options.some(option => option._id.toString() === selectedOptionId);
         if (!optionExists) {
             return res.status(400).json({
                 message: 'Selected option does not belong to the question'
@@ -82,6 +153,15 @@ const saveStudentAnswer = async (req, res) => {
 const getStudentAnswers = async (req, res) => {
     try {
         const { attemptId } = req.params;
+
+        const attempt = await ExamAttempt.findById(attemptId);
+        if (!attempt) {
+            return res.status(404).json({ message: 'Attempt not found' });
+        }
+        if (!isAttemptOwner(attempt, req)) {
+            return res.status(403).json({ message: 'This attempt does not belong to you' });
+        }
+
         const answers = await studentAnswerSchema.find({ attempt_id: attemptId });
         res.status(200).json({
             answers
@@ -94,10 +174,16 @@ const getStudentAnswers = async (req, res) => {
     }
 };
 
+// Helper to evaluate whether selected option is correct using strictly correct_option_id
+const checkIsCorrect = (question, selectedOptionId) => {
+    if (!selectedOptionId || !question || !question.correct_option_id) return false;
+    return question.correct_option_id.toString() === selectedOptionId.toString();
+};
+
 // Submit exam attempt, grade all answers, and set final score
 const submitExam = async (req, res) => {
     try {
-        const { attemptId } = req.body;
+        const { attemptId, reason } = req.body;
         if (!attemptId) {
             return res.status(400).json({ message: 'attemptId is required' });
         }
@@ -107,47 +193,22 @@ const submitExam = async (req, res) => {
             return res.status(404).json({ message: 'Attempt not found' });
         }
 
-        if (attempt.status === 'Submitted') {
-            return res.status(400).json({ message: 'Attempt has already been submitted' });
+        if (!isAttemptOwner(attempt, req)) {
+            return res.status(403).json({ message: 'This attempt does not belong to you' });
         }
 
-        const targetTestId = attempt.testId || attempt.exam_id;
-        const questions = await questionModel.find({
-            $or: [{ testId: targetTestId }, { exam_id: targetTestId }]
-        });
-        const answers = await studentAnswerSchema.find({ attempt_id: attemptId });
-
-        let totalScore = 0;
-        let totalPossibleMarks = 0;
-
-        for (const question of questions) {
-            const qMarks = 1; // 1 point per question
-            totalPossibleMarks += qMarks;
-
-            const studentAns = answers.find(a => a.question_id.toString() === question._id.toString());
-            if (studentAns) {
-                const isCorrect = question.correct_option_id && studentAns.selected_option_id && question.correct_option_id.toString() === studentAns.selected_option_id.toString();
-                studentAns.is_correct = isCorrect;
-                studentAns.marks_awarded = isCorrect ? qMarks : 0;
-                await studentAns.save();
-
-                if (isCorrect) {
-                    totalScore += qMarks;
-                }
-            }
+        if (attempt.status === 'Submitted' || attempt.status === 'Time Expired') {
+            return res.status(400).json({ message: 'Attempt has already been submitted or expired' });
         }
 
-        attempt.score = totalScore;
-        attempt.status = 'Submitted';
-        attempt.submitted_at = new Date();
-        await attempt.save();
-        await generateLeaderboard(attempt.exam_id);
+        const finalStatus = reason === 'Time Expired' ? 'Time Expired' : 'Submitted';
+        const result = await gradeAndSubmitAttempt(attempt, finalStatus);
 
         res.status(200).json({
-            message: 'Exam submitted successfully',
-            score: totalScore,
-            totalMarks: totalPossibleMarks,
-            attempt
+            message: finalStatus === 'Time Expired' ? 'Exam auto-submitted (Time Expired)' : 'Exam submitted successfully',
+            score: result.score,
+            totalMarks: result.totalMarks,
+            attempt: result.attempt
         });
     } catch (err) {
         console.error('Error submitting exam:', err);
@@ -165,20 +226,25 @@ const getResults = async (req, res) => {
             return res.status(404).json({ message: 'Attempt not found' });
         }
 
-        const targetTestId = attempt.testId || attempt.exam_id;
-        const questions = await questionModel.find({
-            $or: [{ testId: targetTestId }, { exam_id: targetTestId }]
-        });
+        if (!isAttemptOwner(attempt, req)) {
+            return res.status(403).json({ message: 'This attempt does not belong to you' });
+        }
+
+        const targetTestId = attempt.testId;
+        const questions = await getTestQuestions(targetTestId, { includeAnswerKey: true });
         const answers = await studentAnswerSchema.find({ attempt_id: attemptId });
 
-        const totalMarks = questions.length; // 1 point per question
+        let totalPossibleMarks = 0;
         let correctCount = 0;
         let wrongCount = 0;
 
         for (const question of questions) {
+            const qMarks = (question && typeof question.marks === 'number') ? question.marks : 1;
+            totalPossibleMarks += qMarks;
+
             const ans = answers.find(a => a.question_id.toString() === question._id.toString());
             if (ans && ans.selected_option_id) {
-                if (question.correct_option_id && question.correct_option_id.toString() === ans.selected_option_id.toString()) {
+                if (checkIsCorrect(question, ans.selected_option_id)) {
                     correctCount++;
                 } else {
                     wrongCount++;
@@ -187,6 +253,7 @@ const getResults = async (req, res) => {
         }
 
         const answeredCount = answers.filter(a => a.selected_option_id).length;
+        const totalMarks = totalPossibleMarks || questions.length;
         const percentage = totalMarks > 0 ? Math.round((attempt.score / totalMarks) * 100) : 0;
 
         res.status(200).json({
@@ -208,4 +275,4 @@ const getResults = async (req, res) => {
     }
 };
 
-module.exports = { saveStudentAnswer, getStudentAnswers, submitExam, getResults };
+module.exports = { saveStudentAnswer, getStudentAnswers, submitExam, getResults, gradeAndSubmitAttempt };

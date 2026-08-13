@@ -11,7 +11,7 @@ const testAssignmentSchema = new mongoose.Schema({
         ref: "TestSchedule",
         required: true
     },
-    rollNumber: {
+    rollno: {
         type: String,
         required: true,
         trim: true

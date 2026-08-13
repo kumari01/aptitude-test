@@ -18,6 +18,7 @@ export function ExamResultPage() {
     total: state.total ?? QUESTIONS.length,
     answeredCount: state.answeredCount ?? 7,
     percentage: state.percentage ?? Math.round(((state.correct ?? 6) / (state.total ?? QUESTIONS.length)) * 100),
+    status: state.isAutoSubmitted ? 'Time Expired' : 'Submitted'
   });
 
   useEffect(() => {
@@ -30,21 +31,29 @@ export function ExamResultPage() {
               total: res.data.totalMarks ?? state.total ?? QUESTIONS.length,
               answeredCount: res.data.answeredCount ?? state.answeredCount ?? 0,
               percentage: res.data.percentage ?? 0,
+              status: res.data.status || (state.isAutoSubmitted ? 'Time Expired' : 'Submitted')
             });
           }
         })
         .catch((err) => console.warn("Could not fetch attempt result from backend:", err));
     }
-  }, [state.attemptId]);
+  }, [state.attemptId, state.isAutoSubmitted]);
 
-  const { correct, total, answeredCount, percentage } = resultData;
+  const { correct, total, answeredCount, percentage, status } = resultData;
   const wrong = Math.max(0, answeredCount - correct);
   const skipped = Math.max(0, total - answeredCount);
   const pct = percentage !== undefined ? percentage : Math.round((correct / (total || 1)) * 100);
   const passed = pct >= 40;
+  const isTimeExpired = status === 'Time Expired' || state.isAutoSubmitted;
 
   return (
     <div className="px-4 sm:px-6 md:px-10 py-10 max-w-2xl mx-auto">
+      {isTimeExpired && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-5 py-3.5 rounded-2xl mb-6 flex items-center gap-3 text-sm font-medium">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+          <span>Notice: The exam time limit expired and your answers were automatically submitted.</span>
+        </div>
+      )}
       <div
         className={`rounded-2xl p-6 text-center mb-6 shadow-sm ${
           passed ? "bg-emerald-50 text-emerald-900 border border-emerald-100" : "bg-red-50 text-red-900 border border-red-100"

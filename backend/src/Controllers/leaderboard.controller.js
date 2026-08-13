@@ -1,6 +1,7 @@
 const Leaderboard = require("../model/leaderboard.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
 const Exam = require("../model/testModel/test.model");
+const { getTestQuestions } = require("../utils/questionservice");
 
 
 /*
@@ -14,10 +15,10 @@ const generateLeaderboard = async (examId) => {
             throw new Error("Exam not found");
         }
 
-        // Get all submitted attempts for this exam
+        // Get all completed/submitted attempts for this exam (Submitted & Time Expired)
         const attempts = await ExamAttempt.find({
-            exam_id: examId,
-            status: "Submitted"
+            testId: examId,
+            status: { $in: ["Submitted", "Time Expired"] }
         }).sort({
             score: -1,
             submitted_at: 1
@@ -25,6 +26,18 @@ const generateLeaderboard = async (examId) => {
 
         if (attempts.length === 0) {
             return [];
+        }
+
+        // Fall back to the actual question marks total if the test's static
+        // totalMarks field is unset/stale, so leaderboard % and the
+        // results-page % (answer.controller.getResults) never disagree.
+        let effectiveTotalMarks = exam.totalMarks;
+        if (!effectiveTotalMarks) {
+            const questions = await getTestQuestions(examId, { includeAnswerKey: true });
+            effectiveTotalMarks = questions.reduce(
+                (sum, q) => sum + (typeof q.marks === 'number' ? q.marks : 1),
+                0
+            );
         }
 
         /*
@@ -49,9 +62,9 @@ const generateLeaderboard = async (examId) => {
             }
 
             const percentage =
-                exam.totalMarks > 0
+                effectiveTotalMarks > 0
                     ? Number(
-                        ((attempt.score / exam.totalMarks) * 100).toFixed(2)
+                        ((attempt.score / effectiveTotalMarks) * 100).toFixed(2)
                     )
                     : 0;
 
@@ -59,11 +72,11 @@ const generateLeaderboard = async (examId) => {
             const leaderboardEntry =
                 await Leaderboard.findOneAndUpdate(
                     {
-                        exam_id: examId,
+                        testId: examId,
                         attempt_id: attempt._id
                     },
                     {
-                        exam_id: examId,
+                        testId: examId,
                         attempt_id: attempt._id,
                         student_id: attempt.student_id,
                         score: attempt.score,
@@ -72,7 +85,7 @@ const generateLeaderboard = async (examId) => {
                     },
                     {
                         upsert: true,
-                        new: true,
+                        returnDocument: 'after',
                         setDefaultsOnInsert: true
                     }
                 );
@@ -100,11 +113,8 @@ const getLeaderboard = async (req, res) => {
     try {
         const { examId } = req.params;
 
-        // Generate/update leaderboard first
-        await generateLeaderboard(examId);
-
         const leaderboard = await Leaderboard.find({
-            exam_id: examId
+            testId: examId
         })
             .populate("student_id", "username email rollno")
             .sort({ rank: 1 });
@@ -135,10 +145,8 @@ const getStudentRank = async (req, res) => {
     try {
         const { examId, studentId } = req.params;
 
-        await generateLeaderboard(examId);
-
         const entry = await Leaderboard.findOne({
-            exam_id: examId,
+            testId: examId,
             student_id: studentId
         })
             .populate("student_id", "username email rollno");
@@ -150,7 +158,7 @@ const getStudentRank = async (req, res) => {
         }
 
         const totalStudents = await Leaderboard.countDocuments({
-            exam_id: examId
+            testId: examId
         });
 
         res.status(200).json({

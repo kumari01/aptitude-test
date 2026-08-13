@@ -4,10 +4,10 @@
 export const USER = { name: "John Student", roll: "23K61A4228" };
 
 export const LIVE_EXAM = {
-  id: 1,
-  title: "Week 12 - Mixed Aptitude",
-  questions: 30,
-  minutes: 45,
+  id: "6a7de002b676832d3826d231",
+  title: "Sample Aptitude & Technical Benchmark Exam",
+  questions: 5,
+  minutes: 30,
   due: "Sunday, Jul 27 · 11:59 PM",
 };
 
@@ -100,10 +100,10 @@ export const RESULTS_LIST = [
 ];
 
 export const EXAMS_LIST = [
-  { id: 1, title: "Week 12 - Mixed Aptitude", category: "Mixed", questions: 30, minutes: 45, live: true },
-  { id: 2, title: "Verbal Reasoning - Set A", category: "Verbal", questions: 8, minutes: 45, live: false },
-  { id: 3, title: "Quantitative Aptitude - Basic", category: "Aptitude", questions: 25, minutes: 35, live: false },
-  { id: 4, title: "Logical Reasoning - Patterns", category: "Reasoning", questions: 20, minutes: 30, live: false },
+  { id: "6a7de002b676832d3826d231", title: "Sample Aptitude & Technical Benchmark Exam", category: "Aptitude", questions: 5, minutes: 30, live: true },
+  { id: "60d5ecb8b5c9c92b9c8b4567", title: "Verbal Reasoning - Set A", category: "Verbal", questions: 8, minutes: 45, live: false },
+  { id: "60d5ecb8b5c9c92b9c8b4568", title: "Quantitative Aptitude - Basic", category: "Aptitude", questions: 25, minutes: 35, live: false },
+  { id: "60d5ecb8b5c9c92b9c8b4569", title: "Logical Reasoning - Patterns", category: "Reasoning", questions: 20, minutes: 30, live: false },
 ];
 
 export const QUESTIONS = [

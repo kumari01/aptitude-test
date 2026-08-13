@@ -63,9 +63,7 @@ async function testFlow() {
     const examData = await examRes.json();
     console.log("Exam Response:", examData);
 
-    const Exam = require("./src/model/exam_model");
-    const latestExam = await Exam.findOne().sort({ createdAt: -1 });
-    const examId = latestExam._id.toString();
+    const examId = examData.test?._id || examData.exam?._id;
 
     // 3. Add Question
     console.log("\n3. Testing Question Creation...");

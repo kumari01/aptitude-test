@@ -1,6 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
 import {
   FileText,
   Clock,
@@ -13,7 +12,7 @@ import {
 import StatCard from "../components/common/StatCard";
 import { LIVE_EXAM, STATS, LEADERBOARD, RECENT_WEEKS } from "../data/mockData";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
-//import axios
+import AdminDashboardPage from "./AdminDashboardPage";
 import axios from "axios";
 
 export function DashboardPage() {
@@ -21,8 +20,16 @@ export function DashboardPage() {
   const [student, setStudent] = useState(null);
   const [progress, setProgress] = useState(null);
 
+  const isAdmin = !!localStorage.getItem("admin");
+
   useEffect(() => {
     const fetchData = async () => {
+      const savedAdmin = localStorage.getItem("admin");
+      if (savedAdmin) {
+        setStudent(JSON.parse(savedAdmin));
+        return;
+      }
+
       try {
         const token = localStorage.getItem("token");
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -58,6 +65,10 @@ export function DashboardPage() {
 
     fetchData();
   }, [navigate]);
+
+  if (isAdmin) {
+    return <AdminDashboardPage />;
+  }
 
   const handleStartExam = (id) => {
     navigate(`/exams/${id}`);

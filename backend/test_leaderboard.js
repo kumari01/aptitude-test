@@ -64,7 +64,6 @@ async function runLeaderboardTests() {
 
       const attempt = new TestAttempt({
         testId: dummyTest._id,
-        exam_id: dummyTest._id,
         student_id: student._id,
         score: scores[i],
         obtainedMarks: scores[i],
@@ -179,7 +178,7 @@ async function runLeaderboardTests() {
     for (const attempt of dummyAttempts) {
       await TestAttempt.deleteOne({ _id: attempt._id });
     }
-    await Leaderboard.deleteMany({ exam_id: dummyTest._id });
+    await Leaderboard.deleteMany({ testId: dummyTest._id });
     console.log("Cleanup completed successfully.");
 
     console.log("\n==========================================");
@@ -205,7 +204,7 @@ async function runLeaderboardTests() {
         for (const attempt of dummyAttempts) {
           await TestAttempt.deleteOne({ _id: attempt._id });
         }
-        await Leaderboard.deleteMany({ exam_id: dummyTest._id });
+        await Leaderboard.deleteMany({ testId: dummyTest._id });
       }
     } catch (cleanErr) {
       console.error("Cleanup during catch failed:", cleanErr);

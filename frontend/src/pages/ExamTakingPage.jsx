@@ -17,6 +17,7 @@ export function ExamTakingPage() {
   const [attemptId, setAttemptId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [autoSubmittedAlert, setAutoSubmittedAlert] = useState(false);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState({});
   const [seconds, setSeconds] = useState(fallbackExam.minutes * 60);
@@ -29,7 +30,8 @@ export function ExamTakingPage() {
         setLoading(true);
         const res = await api.post(`/exams/${examId}/start`);
         if (res.data) {
-          const { attempt, exam: examData, questions: qData } = res.data;
+          const { attempt, exam: examData, questions: qData, isTimeExpired, remainingSeconds } = res.data;
+          
           if (attempt?._id) setAttemptId(attempt._id);
           if (examData?.title) {
             setExam({
@@ -39,6 +41,19 @@ export function ExamTakingPage() {
               totalMarks: examData.total_marks || 10,
             });
           }
+
+          // Handle already expired attempt directly
+          if (isTimeExpired || attempt?.status === 'Submitted' || attempt?.status === 'Time Expired') {
+            navigate(`/exams/${examId}/result`, {
+              state: {
+                attemptId: attempt?._id,
+                examTitle: examData?.title || exam.title,
+                isAutoSubmitted: attempt?.status === 'Time Expired' || isTimeExpired
+              }
+            });
+            return;
+          }
+
           if (qData && qData.length > 0) {
             const formatted = qData.map((q) => ({
               id: q._id,
@@ -50,8 +65,10 @@ export function ExamTakingPage() {
             setQuestions(formatted);
           }
 
-          // Calculate remaining duration based on start time
-          if (attempt?.started_at && examData?.duration_minutes) {
+          // Calculate remaining duration from server response or start time
+          if (remainingSeconds !== undefined) {
+            setSeconds(remainingSeconds);
+          } else if (attempt?.started_at && examData?.duration_minutes) {
             const startTime = new Date(attempt.started_at).getTime();
             const totalDurationMs = (examData.duration_minutes || 30) * 60 * 1000;
             const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
@@ -89,17 +106,24 @@ export function ExamTakingPage() {
     }
 
     initExam();
-  }, [examId]);
+  }, [examId, navigate]);
 
-  const finishExam = async () => {
+  const finishExam = async (isAutoSubmit = false) => {
+    const autoSubmitted = isAutoSubmit === true;
     if (submitting) return;
     setSubmitting(true);
+    if (autoSubmitted) {
+      setAutoSubmittedAlert(true);
+    }
     if (timerRef.current) clearInterval(timerRef.current);
 
     let submitResult = null;
     if (attemptId) {
       try {
-        const res = await api.post("/answers/submit", { attemptId });
+        const res = await api.post("/answers/submit", {
+          attemptId,
+          reason: autoSubmitted ? "Time Expired" : "Manual Submit"
+        });
         submitResult = res.data;
       } catch (err) {
         console.warn("Backend submit error, using client calculation:", err);
@@ -121,6 +145,7 @@ export function ExamTakingPage() {
         score: submitResult?.score,
         percentage: submitResult?.percentage,
         examTitle: exam.title,
+        isAutoSubmitted: autoSubmitted,
       },
     });
   };
@@ -139,12 +164,16 @@ export function ExamTakingPage() {
   }, []);
 
   useEffect(() => {
-    if (seconds === 0 && !loading) finishExam();
+    if (seconds === 0 && !loading && !submitting) {
+      finishExam(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seconds, loading]);
+  }, [seconds, loading, submitting]);
 
   const answeredCount = Object.keys(answers).length;
   const isLast = current === questions.length - 1;
+  const isLowTime = seconds > 0 && seconds <= 300; // <= 5 mins
+  const isUrgentTime = seconds > 0 && seconds <= 60; // <= 1 min
 
   async function selectOption(qIndex, optIndex) {
     setAnswers((prev) => ({ ...prev, [qIndex]: optIndex }));
@@ -153,13 +182,20 @@ export function ExamTakingPage() {
     const qObj = questions[qIndex];
     if (attemptId && qObj?.id && qObj?.rawOptions?.[optIndex]?._id) {
       try {
-        await api.post("/answers/save", {
+        const saveRes = await api.post("/answers/save", {
           attemptId,
           questionId: qObj.id,
           selectedOptionId: qObj.rawOptions[optIndex]._id,
         });
+        if (saveRes.data?.isTimeExpired) {
+          finishExam(true);
+        }
       } catch (err) {
-        console.warn("Failed to persist student answer to backend:", err);
+        if (err.response?.data?.isTimeExpired) {
+          finishExam(true);
+        } else {
+          console.warn("Failed to persist student answer to backend:", err);
+        }
       }
     }
   }
@@ -188,11 +224,20 @@ export function ExamTakingPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 border border-gray-200 rounded-full px-4 py-1.5 text-sm font-semibold text-gray-700">
-            <Clock size={15} /> {formatTime(seconds)}
+          <div
+            className={`flex items-center gap-1.5 border rounded-full px-4 py-1.5 text-sm font-semibold transition-all ${
+              isUrgentTime
+                ? "bg-red-50 text-red-600 border-red-200 animate-pulse"
+                : isLowTime
+                ? "bg-amber-50 text-amber-600 border-amber-200"
+                : "border-gray-200 text-gray-700"
+            }`}
+          >
+            {isLowTime ? <AlertCircle size={15} className="text-amber-500" /> : <Clock size={15} />}
+            <span>{formatTime(seconds)}</span>
           </div>
           <button
-            onClick={finishExam}
+            onClick={() => finishExam(false)}
             disabled={submitting}
             className="flex items-center gap-1.5 text-white font-semibold px-5 py-2 rounded-full hover:opacity-90 transition-opacity disabled:opacity-50"
             style={{ background: BRAND }}
@@ -251,7 +296,7 @@ export function ExamTakingPage() {
             </button>
             {isLast ? (
               <button
-                onClick={finishExam}
+                onClick={() => finishExam(false)}
                 disabled={submitting}
                 className="flex items-center gap-1.5 text-white font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
                 style={{ background: BRAND }}

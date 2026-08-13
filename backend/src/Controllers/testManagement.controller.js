@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Test = require("../model/testModel/test.model");
 const TestSetting = require("../model/testModel/testSetting.model");
 const TestTarget = require("../model/testModel/testTarget.model");
@@ -10,18 +11,23 @@ const { Student } = require("../model/user.model");
 // Create a new test with settings & target group
 const createTest = async (req, res) => {
     try {
-        const { title, testType, maxAttempts, createdBy, proctoringEnabled, tabSwitchLimit, autoSubmit, targetType, departments, batches, studentRollNumbers } = req.body;
+        const { title, testType, duration_minutes, totalMarks, total_marks, maxAttempts, status, proctoringEnabled, tabSwitchLimit, autoSubmit, targetType, departments, batches, studentRollNumbers } = req.body;
 
         if (!title) {
             return res.status(400).json({ message: "Test title is required" });
         }
 
+        // A newly created test isn't ready to be taken yet — it still needs
+        // questions and a schedule. scheduleTest() is what flips this to
+        // "Published", matching the ADMIN workflow.
         const test = new Test({
             title,
             testType: testType || "Aptitude",
-            status: "Draft",
+            status: status || "Draft",
+            duration_minutes: duration_minutes || 30,
+            totalMarks: totalMarks || total_marks || 0,
             maxAttempts: maxAttempts || 1,
-            createdBy
+            createdBy: req.user.id
         });
         await test.save();
 
@@ -33,6 +39,9 @@ const createTest = async (req, res) => {
         });
         await setting.save();
 
+        // All Departments vs Selected Departments lives here, as part of
+        // Test Settings — scheduleTest() reads this back rather than
+        // accepting a second copy of the same targeting fields.
         const target = new TestTarget({
             testId: test._id,
             targetType: targetType || "All",
@@ -63,7 +72,7 @@ const updateTestSettings = async (req, res) => {
         const setting = await TestSetting.findOneAndUpdate(
             { testId },
             { proctoringEnabled, tabSwitchLimit, autoSubmit },
-            { new: true, upsert: true, setDefaultsOnInsert: true }
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
         );
 
         res.status(200).json({
@@ -76,11 +85,39 @@ const updateTestSettings = async (req, res) => {
     }
 };
 
+// Update test target group (All / Department / Batch / SpecificStudents) —
+// part of Test Settings, editable independently of scheduling
+const updateTestTarget = async (req, res) => {
+    try {
+        const { testId } = req.params;
+        const { targetType, departments, batches, studentRollNumbers } = req.body;
+
+        const target = await TestTarget.findOneAndUpdate(
+            { testId },
+            {
+                targetType: targetType || "All",
+                departments: departments || [],
+                batches: batches || [],
+                studentRollNumbers: studentRollNumbers || []
+            },
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
+        );
+
+        res.status(200).json({
+            message: "Test target updated successfully",
+            target
+        });
+    } catch (err) {
+        console.error("Error updating test target:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 // Schedule a test & assign to targeted students
 const scheduleTest = async (req, res) => {
     try {
         const { testId } = req.params;
-        const { startAt, endAt, targetDepartments, targetBatches, studentRollNumbers } = req.body;
+        const { startAt, endAt } = req.body;
 
         if (!startAt || !endAt) {
             return res.status(400).json({ message: "startAt and endAt timestamps are required" });
@@ -91,44 +128,62 @@ const scheduleTest = async (req, res) => {
             return res.status(404).json({ message: "Test not found" });
         }
 
+        // TestTarget (set in Test Settings, at createTest time) is the single
+        // source of truth for who this test targets. Scheduling reads it
+        // back instead of accepting a second, possibly conflicting copy of
+        // the same targeting fields.
+        const target = await TestTarget.findOne({ testId });
+
         const schedule = new TestSchedule({
             testId,
             startAt,
             endAt,
-            targetDepartments: targetDepartments || [],
-            targetBatches: targetBatches || [],
+            targetDepartments: target?.departments || [],
+            targetBatches: target?.batches || [],
             status: "Scheduled"
         });
         await schedule.save();
 
+        // Scheduling is what actually publishes the test
         test.status = "Published";
         await test.save();
 
-        // Target student assignments
-        let rollNumbersToAssign = studentRollNumbers || [];
-        if (!rollNumbersToAssign.length) {
+        // Resolve which students to assign based on the saved target group.
+        // targetType matches the TestTarget schema enum exactly:
+        // All | Department | Batch | SpecificStudents
+        let rollNumbersToAssign = [];
+        if (target?.targetType === "SpecificStudents" && target.studentRollNumbers?.length) {
+            rollNumbersToAssign = target.studentRollNumbers;
+        } else {
             const query = {};
-            if (targetDepartments && targetDepartments.length) query.department = { $in: targetDepartments };
-            if (targetBatches && targetBatches.length) query.batch = { $in: targetBatches };
-
+            if (target?.targetType === "Department" && target.departments?.length) {
+                query.department = { $in: target.departments };
+            } else if (target?.targetType === "Batch" && target.batches?.length) {
+                query.batch = { $in: target.batches };
+            }
+            // "All" (or no TestTarget saved yet) -> empty query = every student
             const students = await Student.find(query, { rollno: 1 });
             rollNumbersToAssign = students.map(s => s.rollno);
         }
 
-        const assignments = [];
-        for (const roll of rollNumbersToAssign) {
-            const assignment = await TestAssignment.findOneAndUpdate(
-                { testId, scheduleId: schedule._id, rollNumber: roll },
-                { attemptLimit: test.maxAttempts || 1, status: "Assigned" },
-                { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
-            assignments.push(assignment);
+        // Bulk-upsert all assignments in a single round trip instead of one
+        // findOneAndUpdate per student — matters once a test targets
+        // hundreds of students at once.
+        if (rollNumbersToAssign.length > 0) {
+            const bulkOps = rollNumbersToAssign.map(roll => ({
+                updateOne: {
+                    filter: { testId, scheduleId: schedule._id, rollno: roll },
+                    update: { $set: { attemptLimit: test.maxAttempts || 1, status: "Assigned" } },
+                    upsert: true
+                }
+            }));
+            await TestAssignment.bulkWrite(bulkOps);
         }
 
         res.status(200).json({
             message: "Test scheduled and assigned successfully",
             schedule,
-            totalAssigned: assignments.length
+            totalAssigned: rollNumbersToAssign.length
         });
     } catch (err) {
         console.error("Error scheduling test:", err);
@@ -174,6 +229,11 @@ const addQuestionToSection = async (req, res) => {
             return res.status(400).json({ message: "questionId is required" });
         }
 
+        const section = await Section.findById(sectionId);
+        if (!section) {
+            return res.status(404).json({ message: "Section not found" });
+        }
+
         const sectionQuestion = new SectionQuestion({
             sectionId,
             questionId,
@@ -182,10 +242,16 @@ const addQuestionToSection = async (req, res) => {
         });
         await sectionQuestion.save();
 
-        // Update section total marks
+        // Recompute this section's total marks
         const allSecQuestions = await SectionQuestion.find({ sectionId });
         const sectionMarks = allSecQuestions.reduce((sum, sq) => sum + (sq.marks || 1), 0);
         await Section.findByIdAndUpdate(sectionId, { totalMarks: sectionMarks });
+
+        // Keep the parent test's totalMarks in sync with its sections, so
+        // results/leaderboard percentages never drift from the question set.
+        const allSections = await Section.find({ testId: section.testId });
+        const testTotalMarks = allSections.reduce((sum, sec) => sum + (sec.totalMarks || 0), 0);
+        await Test.findByIdAndUpdate(section.testId, { totalMarks: testTotalMarks });
 
         res.status(201).json({
             message: "Question added to section successfully",
@@ -201,6 +267,9 @@ const addQuestionToSection = async (req, res) => {
 const getTestDetails = async (req, res) => {
     try {
         const { testId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(testId)) {
+            return res.status(404).json({ message: "Test not found" });
+        }
         const test = await Test.findById(testId);
         if (!test) {
             return res.status(404).json({ message: "Test not found" });
@@ -236,10 +305,20 @@ const getTestDetails = async (req, res) => {
 // List tests assigned to a student
 const listStudentAssignedTests = async (req, res) => {
     try {
-        const rollNumber = req.query.rollNumber || req.query.rollno;
+        let rollno = req.query.rollno;
+
+        // This route is authenticated — if the caller is a student, always
+        // use their own rollno rather than trusting a query param. Otherwise
+        // one student could look up another student's assigned tests just
+        // by passing a different rollno.
+        if (req.user?.role === "student") {
+            const student = await Student.findById(req.user.id, { rollno: 1 });
+            rollno = student?.rollno;
+        }
+
         let query = {};
-        if (rollNumber) {
-            const assignments = await TestAssignment.find({ rollNumber });
+        if (rollno) {
+            const assignments = await TestAssignment.find({ rollno });
             const testIds = assignments.map(a => a.testId);
             query = { _id: { $in: testIds } };
         }
@@ -266,6 +345,7 @@ const listStudentAssignedTests = async (req, res) => {
 module.exports = {
     createTest,
     updateTestSettings,
+    updateTestTarget,
     scheduleTest,
     createSection,
     addQuestionToSection,

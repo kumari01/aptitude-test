@@ -1,0 +1,508 @@
+{
+	"info": {
+		"_postman_id": "quiz-app-api-collection",
+		"name": "Quiz App API Collection",
+		"description": "Complete collection of all 26 API endpoints for the Quiz App backend with Admin & Student authorization.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "studentToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "adminToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "examId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "attemptId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "questionId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "sectionId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "studentId",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. System & Health",
+			"item": [
+				{
+					"name": "GET Root Welcome Message",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": ["{{baseUrl}}"],
+							"path": [""]
+						}
+					}
+				},
+				{
+					"name": "GET Exam Router Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/exams/hello",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "exams", "hello"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Authentication",
+			"item": [
+				{
+					"name": "POST Student Signup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"john_doe\",\n  \"rollno\": \"21A12A0501\",\n  \"email\": \"john_doe@sasi.ac.in\",\n  \"password\": \"Password123!\",\n  \"department\": \"CSE\",\n  \"batch\": \"2021-2025\",\n  \"section\": \"A\",\n  \"phone\": \"9876543210\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/student/signup",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "student", "signup"]
+						}
+					}
+				},
+				{
+					"name": "POST Student Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rollno\": \"21A12A0501\",\n  \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/student/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "student", "login"]
+						}
+					}
+				},
+				{
+					"name": "GET Student Profile (Protected)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/student/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "student", "profile"]
+						}
+					}
+				},
+				{
+					"name": "GET Student Progress (Protected)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/student/progress",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "student", "progress"]
+						}
+					}
+				},
+				{
+					"name": "POST Admin Signup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin_user\",\n  \"adminid\": \"ADM1001\",\n  \"email\": \"admin_user@sasi.ac.in\",\n  \"password\": \"Password123!\",\n  \"phone\": \"9876543210\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/admin/signup",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "admin", "signup"]
+						}
+					}
+				},
+				{
+					"name": "POST Admin Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"adminid\": \"ADM1001\",\n  \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/admin/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "admin", "login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Exams & Question Creation (Admin / Student)",
+			"item": [
+				{
+					"name": "POST Create Exam (Admin Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Data Structures Midterm Exam\",\n  \"duration_minutes\": 60,\n  \"total_marks\": 50\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/exams/create",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "exams", "create"]
+						}
+					}
+				},
+				{
+					"name": "POST Add Question to Exam (Admin Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"question_text\": \"What is the time complexity of binary search?\",\n  \"options\": [\n    { \"text\": \"O(N)\" },\n    { \"text\": \"O(log N)\" },\n    { \"text\": \"O(N^2)\" },\n    { \"text\": \"O(1)\" }\n  ],\n  \"correct_answer\": 1,\n  \"marks\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/exams/{{examId}}/questions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "exams", "{{examId}}", "questions"]
+						}
+					}
+				},
+				{
+					"name": "GET Exam Questions (Student Protected)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/exams/{{examId}}/questions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "exams", "{{examId}}", "questions"]
+						}
+					}
+				},
+				{
+					"name": "POST Start Exam (Student Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/exams/{{examId}}/start",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "exams", "{{examId}}", "start"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Test Management & Sections",
+			"item": [
+				{
+					"name": "POST Create Managed Test (Admin Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Computer Networks Quiz\",\n  \"category\": \"GATE Prep\",\n  \"description\": \"Assessment test for unit 1\",\n  \"durationMinutes\": 45,\n  \"maxAttempts\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/test-management/create",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "test-management", "create"]
+						}
+					}
+				},
+				{
+					"name": "GET Test Details (Protected)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/test-management/{{examId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "test-management", "{{examId}}"]
+						}
+					}
+				},
+				{
+					"name": "PUT Update Test Settings (Admin Only)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tabSwitchLimit\": 3,\n  \"enableProctoring\": true,\n  \"fullScreenRequired\": true,\n  \"randomizeQuestions\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/test-management/{{examId}}/settings",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "test-management", "{{examId}}", "settings"]
+						}
+					}
+				},
+				{
+					"name": "PUT Update Test Target Group (Admin Only)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"targetType\": \"Selected\",\n  \"departments\": [\"CSE\", \"ECE\"],\n  \"batches\": [\"2021-2025\"],\n  \"studentRollNumbers\": [\"21A12A0501\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/test-management/{{examId}}/target",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "test-management", "{{examId}}", "target"]
+						}
+					}
+				},
+				{
+					"name": "POST Schedule Test (Admin Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"startAt\": \"2026-08-15T09:00:00.000Z\",\n  \"endAt\": \"2026-08-15T18:00:00.000Z\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/test-management/{{examId}}/schedule",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "test-management", "{{examId}}", "schedule"]
+						}
+					}
+				},
+				{
+					"name": "POST Create Section (Admin Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Section A: Multiple Choice\",\n  \"displayOrder\": 1,\n  \"totalMarks\": 20\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/test-management/{{examId}}/sections",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "test-management", "{{examId}}", "sections"]
+						}
+					}
+				},
+				{
+					"name": "POST Add Question to Section (Admin Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"questionId\": \"{{questionId}}\",\n  \"displayOrder\": 1,\n  \"marks\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/test-management/sections/{{sectionId}}/questions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "test-management", "sections", "{{sectionId}}", "questions"]
+						}
+					}
+				},
+				{
+					"name": "GET Assigned Tests for Student (Student Only)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/test-management/student/assigned?rollNumber=21A12A0501",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "test-management", "student", "assigned"],
+							"query": [
+								{ "key": "rollNumber", "value": "21A12A0501" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Answers & Attempt Execution (Student)",
+			"item": [
+				{
+					"name": "POST Save Student Answer (Student Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"attemptId\": \"{{attemptId}}\",\n  \"questionId\": \"{{questionId}}\",\n  \"selectedOptionId\": \"OPTION_ID_HERE\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/answers/save",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "answers", "save"]
+						}
+					}
+				},
+				{
+					"name": "GET Attempt Saved Answers (Student Only)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/answers/attempt/{{attemptId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "answers", "attempt", "{{attemptId}}"]
+						}
+					}
+				},
+				{
+					"name": "POST Submit Exam (Student Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"attemptId\": \"{{attemptId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/answers/submit",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "answers", "submit"]
+						}
+					}
+				},
+				{
+					"name": "GET Exam Results (Student Only)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{studentToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/answers/results/{{attemptId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "answers", "results", "{{attemptId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Leaderboard",
+			"item": [
+				{
+					"name": "GET Full Exam Leaderboard",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/leaderboard/{{examId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "leaderboard", "{{examId}}"]
+						}
+					}
+				},
+				{
+					"name": "GET Specific Student Rank",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/leaderboard/{{examId}}/student/{{studentId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "leaderboard", "{{examId}}", "student", "{{studentId}}"]
+						}
+					}
+				}
+			]
+		}
+	]
+}

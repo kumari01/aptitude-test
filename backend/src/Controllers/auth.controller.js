@@ -2,7 +2,7 @@ const { Student: studentModel, Admin: adminModel } = require('../model/user.mode
 const ExamAttempt = require('../model/testModel/testAttempt.model');
 
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+const { issueAuthToken } = require('../utils/authToken');
 
 const RegisterStudent = async(req,res) =>{
     try{
@@ -41,12 +41,14 @@ const RegisterStudent = async(req,res) =>{
             status: "active"
         });
 
+        const token = issueAuthToken(res, student._id, "student");
+
         const studentData = student.toObject();
         delete studentData.password;
-        delete studentData.passwordHash;
 
         res.status(201).json({
             message: 'Student created successfully',
+            token,
             student: studentData
         });
     } catch (error) {
@@ -56,12 +58,7 @@ const RegisterStudent = async(req,res) =>{
 const studentlogin = async(req,res) =>{
     try{
         const {rollno,password} = req.body;
-        const student = await studentModel.findOne({
-            $or: [
-                { rollNumber: rollno },
-                { rollno: rollno }
-            ]
-        });
+        const student = await studentModel.findOne({ rollno });
         if(!student){
             return res.status(404).json({message: 'Student not found'});
         }
@@ -70,30 +67,15 @@ const studentlogin = async(req,res) =>{
             return res.status(403).json({message: 'Student account is not active'});
         }
 
-        const isPasswordValid = await bcrypt.compare(password, student.passwordHash || student.password);
+        const isPasswordValid = await bcrypt.compare(password, student.password);
         if(!isPasswordValid){
             return res.status(401).json({message: 'Invalid password'});
         }
-        const token = jwt.sign(
-            {
-                id: student._id,
-                role: "student"
-            },
-            process.env.JWT_SECRET || process.env.JWT || "default_jwt_secret",
-            {
-                expiresIn: "1h"
-            }
-        );
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 60 * 60 * 1000
-        });
+
+        const token = issueAuthToken(res, student._id, "student");
 
         const studentData = student.toObject();
         delete studentData.password;
-        delete studentData.passwordHash;
 
         res.status(200).json({
             message: 'Student logged in successfully',
@@ -133,12 +115,14 @@ const adminregister = async(req,res) =>{
             status: "active"
         });
 
+        const token = issueAuthToken(res, admin._id, "admin");
+
         const adminData = admin.toObject();
         delete adminData.password;
-        delete adminData.passwordHash;
 
         res.status(201).json({
             message: 'Admin created successfully',
+            token,
             admin: adminData
         });
     } catch (error) {
@@ -158,7 +142,7 @@ const adminlogin = async(req,res) =>{
             return res.status(403).json({message: 'Admin account is not active'});
         }
 
-        const isPasswordValid = await bcrypt.compare(password, admin.passwordHash || admin.password);
+        const isPasswordValid = await bcrypt.compare(password, admin.password);
         if(!isPasswordValid){
             return res.status(401).json({message: 'Invalid password'});
         }
@@ -167,26 +151,10 @@ const adminlogin = async(req,res) =>{
         admin.lastLoginAt = new Date();
         await admin.save();
 
-        const token = jwt.sign(
-            {
-                id: admin._id,
-                role: "admin"
-            },
-            process.env.JWT_SECRET || process.env.JWT || "default_jwt_secret",
-            {
-                expiresIn: "1h"
-            }
-        );
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 60 * 60 * 1000
-        });
+        const token = issueAuthToken(res, admin._id, "admin");
 
         const adminData = admin.toObject();
         delete adminData.password;
-        delete adminData.passwordHash;
 
         res.status(200).json({
             message: 'Admin logged in successfully',
@@ -227,15 +195,11 @@ const getStudentProgress = async (req, res) => {
   try {
     const studentId = req.user.id;
 
-    // Fetch all submitted attempts for this student, populated with exam details
-    const attempts = await ExamAttempt.find({
+    // Get total count of completed exams
+    const examsCompleted = await ExamAttempt.countDocuments({
       student_id: studentId,
-      status: "Submitted",
-    })
-      .populate("exam_id", "title category totalMarks")
-      .sort({ submitted_at: -1 }).limit(7);
-
-    const examsCompleted = attempts.length;
+      status: { $in: ["Submitted", "Time Expired"] },
+    });
 
     if (examsCompleted === 0) {
       return res.status(200).json({
@@ -246,27 +210,46 @@ const getStudentProgress = async (req, res) => {
       });
     }
 
+    // Fetch all completed attempts for score statistics
+    const allAttempts = await ExamAttempt.find({
+      student_id: studentId,
+      status: { $in: ["Submitted", "Time Expired"] },
+    }).populate("testId", "title category totalMarks");
+
     let totalPct = 0;
     let bestPct = 0;
 
-    const recentAttempts = attempts.map((att) => {
-      const totalMarks = att.exam_id?.totalMarks || 30;
-      const pctValue = Math.round((att.score / totalMarks) * 100);
-      
+    allAttempts.forEach((att) => {
+      const totalMarks = att.testId?.totalMarks || 10;
+      const pctValue = totalMarks > 0 ? Math.round((att.score / totalMarks) * 100) : 0;
       totalPct += pctValue;
       if (pctValue > bestPct) bestPct = pctValue;
+    });
+
+    // Fetch top 7 recent attempts for dashboard display
+    const recentAttemptsDocs = await ExamAttempt.find({
+      student_id: studentId,
+      status: { $in: ["Submitted", "Time Expired"] },
+    })
+      .populate("testId", "title category totalMarks")
+      .sort({ submitted_at: -1 })
+      .limit(7);
+
+    const recentAttempts = recentAttemptsDocs.map((att) => {
+      const totalMarks = att.testId?.totalMarks || 10;
+      const pctValue = totalMarks > 0 ? Math.round((att.score / totalMarks) * 100) : 0;
 
       return {
         id: att._id,
-        title: att.exam_id?.title || "Exam Attempt",
+        title: att.testId?.title || "Exam Attempt",
         score: `${pctValue}%`,
         marks: `${att.score}/${totalMarks} marks`,
-        status: pctValue >= 50 ? "Passed" : "Failed",
+        status: pctValue >= 40 ? "Passed" : "Failed",
         date: att.submitted_at ? new Date(att.submitted_at).toLocaleDateString() : "N/A",
       };
     });
 
-    const avgScore = `${Math.round(totalPct / examsCompleted)}%`;
+    const avgScore = `${Math.round(totalPct / (allAttempts.length || 1))}%`;
     const bestScore = `${bestPct}%`;
 
     res.status(200).json({

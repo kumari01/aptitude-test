@@ -4,7 +4,7 @@
   "main": "sever.js",
   "scripts": {
     "start": "nodemon sever.js",
-    "test": "node test_auth.js",
+    "test": "node test_all_routes.js",
     "test:leaderboard": "node test_leaderboard.js"
   },
   "keywords": [],
