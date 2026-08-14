@@ -32,6 +32,10 @@ const proctoringSessionSchema = new mongoose.Schema(
       ],
       default: "ACTIVE",
     },
+
+    endedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

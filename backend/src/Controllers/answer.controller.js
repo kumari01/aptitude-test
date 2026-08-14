@@ -2,7 +2,7 @@ const studentAnswerSchema = require("../model/studentAnswer.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
 const questionModel = require("../model/question.model");
 const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
-const submitAttempt = require('../services/attempt.service');
+const { submitAttempt } = require('../services/attempt.service');
 const {
     generateLeaderboard
 } = require("./leaderboard.controller");

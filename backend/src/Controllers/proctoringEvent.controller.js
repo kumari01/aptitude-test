@@ -14,7 +14,7 @@ const createEvent = async (req, res) => {
       success: true,
       message: "Proctoring event recorded successfully",
       data: result,
-    });m 
+    });
   } catch (error) {
     return res.status(400).json({
       success: false,

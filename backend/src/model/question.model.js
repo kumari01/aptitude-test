@@ -16,7 +16,7 @@ const questionSchema = new mongoose.Schema({
         ref: "Test",
     },
 
-    examId: {
+    exam_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Test"
     },

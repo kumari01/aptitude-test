@@ -55,7 +55,7 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
                 }
             },
             {
-                new: true
+                returnDocument: 'after'
             }
         );
 
@@ -90,7 +90,7 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
                 }
             },
             {
-                new: true
+                returnDocument: 'after'
             }
         );
     }

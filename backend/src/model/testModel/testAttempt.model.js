@@ -5,7 +5,11 @@ const testAttemptSchema = new mongoose.Schema(
     testId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Test",
-      required: true,
+    },
+
+    exam_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Test",
     },
 
     scheduleId: {
@@ -23,7 +27,7 @@ const testAttemptSchema = new mongoose.Schema(
       trim: true,
     },
 
-    studentId: {
+    student_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Student",
     },
@@ -34,12 +38,12 @@ const testAttemptSchema = new mongoose.Schema(
       min: 1,
     },
 
-    startedAt: {
+    started_at: {
       type: Date,
       default: Date.now,
     },
 
-    submittedAt: {
+    submitted_at: {
       type: Date,
     },
 
@@ -53,25 +57,31 @@ const testAttemptSchema = new mongoose.Schema(
       default: 0,
     },
 
+    tab_switches: {
+      type: Number,
+      default: 0,
+    },
+
     status: {
       type: String,
       enum: [
-        "STARTED",
-        "SUBMITTED",
-        "TIME_EXPIRED",
-        "AUTO_SUBMITTED",
-        "DISQUALIFIED",
+        "Started",
+        "Submitted",
+        "Time Expired",
+        "Auto Submitted",
+        "Disqualified",
       ],
-      default: "STARTED",
+      default: "Started",
     },
   },
   {
     timestamps: true,
+    strict: false,
   }
 );
 
 testAttemptSchema.index({
-  studentId: 1,
+  student_id: 1,
   testId: 1,
 });
 

@@ -72,7 +72,7 @@ const generateLeaderboard = async (examId) => {
                     },
                     {
                         upsert: true,
-                        new: true,
+                        returnDocument: 'after',
                         setDefaultsOnInsert: true
                     }
                 );
