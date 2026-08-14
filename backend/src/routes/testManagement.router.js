@@ -26,4 +26,8 @@ router.post("/sections/:sectionId/questions", authenticate, requireAdmin, contro
 router.get("/student/assigned", authenticate, controller.listStudentAssignedTests);
 router.get("/:testId", authenticate, controller.getTestDetails);
 
+// Delete routes
+router.delete("/all", authenticate, requireAdmin, controller.deleteAllTests);
+router.delete("/:testId", authenticate, requireAdmin, controller.deleteTest);
+
 module.exports = router;

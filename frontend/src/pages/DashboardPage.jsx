@@ -8,17 +8,20 @@ import {
   Award,
   TrendingUp,
   Trophy,
+  AlertCircle
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
-import { LIVE_EXAM, STATS, LEADERBOARD, RECENT_WEEKS } from "../data/mockData";
+import { STATS, LEADERBOARD, RECENT_WEEKS } from "../data/mockData";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
 import AdminDashboardPage from "./AdminDashboardPage";
 import axios from "axios";
+import api from "../api/axios";
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const [student, setStudent] = useState(null);
   const [progress, setProgress] = useState(null);
+  const [assignedExams, setAssignedExams] = useState([]);
 
   const isAdmin = !!localStorage.getItem("admin");
 
@@ -34,7 +37,7 @@ export function DashboardPage() {
         const token = localStorage.getItem("token");
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [profileRes, progressRes] = await Promise.all([
+        const [profileRes, progressRes, examsRes] = await Promise.all([
           axios.get("http://localhost:3000/api/auth/student/profile", {
             withCredentials: true,
             headers,
@@ -43,6 +46,7 @@ export function DashboardPage() {
             withCredentials: true,
             headers,
           }).catch(() => null),
+          api.get("/test-management/student/assigned").catch(() => null),
         ]);
 
         if (profileRes?.data?.student) {
@@ -50,6 +54,18 @@ export function DashboardPage() {
         }
         if (progressRes?.data) {
           setProgress(progressRes.data);
+        }
+        if (examsRes?.data?.tests) {
+          const formatted = examsRes.data.tests.map(({ test, setting, schedule }) => ({
+            id: test._id,
+            title: test.title,
+            category: test.testType || "Aptitude",
+            minutes: test.duration_minutes || test.durationMinutes || 30,
+            questions: test.totalMarks || 10,
+            live: test.status === "Published",
+            due: schedule?.endAt ? new Date(schedule.endAt).toLocaleDateString() : "No deadline",
+          }));
+          setAssignedExams(formatted);
         }
       } catch (error) {
         console.error("Dashboard fetch error:", error);
@@ -70,6 +86,8 @@ export function DashboardPage() {
     return <AdminDashboardPage />;
   }
 
+  const activeExam = assignedExams.find(e => e.live) || assignedExams[0];
+
   const handleStartExam = (id) => {
     navigate(`/exams/${id}`);
   };
@@ -82,43 +100,66 @@ export function DashboardPage() {
       <p className="text-gray-500 mt-1 mb-6">Here's your weekly exam status</p>
 
       {/* LIVE EXAM BANNER */}
-      <div
-        className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-6 relative overflow-hidden shadow-sm"
-        style={{ background: INK }}
-      >
-        <div>
-          <div className="flex items-center gap-3 mb-3">
-            <span
-              className="text-[11px] font-bold tracking-wide text-white px-2.5 py-1 rounded-full"
-              style={{ background: BRAND }}
-            >
-              LIVE NOW
-            </span>
-            <span className="text-gray-400 text-sm">This Week's Exam</span>
+      {activeExam ? (
+        <div
+          className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-6 relative overflow-hidden shadow-sm"
+          style={{ background: INK }}
+        >
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <span
+                className="text-[11px] font-bold tracking-wide text-white px-2.5 py-1 rounded-full"
+                style={{ background: BRAND }}
+              >
+                LIVE NOW
+              </span>
+              <span className="text-gray-400 text-sm">Active Exam</span>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: FONT_DISPLAY }}>
+              {activeExam.title}
+            </h2>
+            <div className="flex flex-wrap items-center gap-4 sm:gap-5 text-gray-400 text-sm">
+              <span className="flex items-center gap-1.5">
+                <FileText size={15} /> {activeExam.questions} questions
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Clock size={15} /> {activeExam.minutes} minutes
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Calendar size={15} /> Due {activeExam.due}
+              </span>
+            </div>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: FONT_DISPLAY }}>
-            {LIVE_EXAM.title}
-          </h2>
-          <div className="flex flex-wrap items-center gap-4 sm:gap-5 text-gray-400 text-sm">
-            <span className="flex items-center gap-1.5">
-              <FileText size={15} /> {LIVE_EXAM.questions} questions
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Clock size={15} /> {LIVE_EXAM.minutes} minutes
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Calendar size={15} /> Due {LIVE_EXAM.due}
-            </span>
+          <button
+            onClick={() => handleStartExam(activeExam.id)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0"
+            style={{ background: BRAND }}
+          >
+            Take Exam <ArrowRight size={16} />
+          </button>
+        </div>
+      ) : (
+        <div
+          className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-6 relative overflow-hidden shadow-sm border border-gray-200 bg-white"
+        >
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 shrink-0 mt-1">
+              <AlertCircle size={24} />
+            </div>
+            <div>
+              <span className="text-[11px] font-bold tracking-wide text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                NO ACTIVE EXAM
+              </span>
+              <h2 className="text-xl font-bold text-gray-900 mt-2 mb-1" style={{ fontFamily: FONT_DISPLAY }}>
+                No exams scheduled right now
+              </h2>
+              <p className="text-sm text-gray-500">
+                When an administrator creates and publishes a new exam for you, it will appear here.
+              </p>
+            </div>
           </div>
         </div>
-        <button
-          onClick={() => handleStartExam(LIVE_EXAM.id)}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0"
-          style={{ background: BRAND }}
-        >
-          Take Exam <ArrowRight size={16} />
-        </button>
-      </div>
+      )}
 
       {/* STATS GRID */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -140,7 +181,7 @@ export function DashboardPage() {
         />
         <StatCard
           label="Exams Completed"
-          value={progress ? `${progress.examsCompleted}/12` : STATS.completed}
+          value={progress ? `${progress.examsCompleted}` : "0"}
           icon={<FileText size={17} />}
           iconBg="#DBEAFE"
           iconColor="#2563EB"

@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Test = require("../model/testModel/test.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
 const TestSchedule = require("../model/testModel/testSchedule.model");
+const TestTarget = require("../model/testModel/testTarget.model");
 const TestAssignment = require("../model/testModel/testAssignment.model");
 const { Student } = require("../model/user.model");
 const { gradeAndSubmitAttempt } = require("./answer.controller");
@@ -34,25 +35,45 @@ const startExam = async (req, res) => {
             });
         }
 
-        // 1. Validate student assignment access (TestAssignment as source of truth)
-        const assignmentCount = await TestAssignment.countDocuments({ testId: examId });
-        if (assignmentCount > 0) {
-            let studentRollno = reqRollno;
-            if (!studentRollno && studentId && mongoose.Types.ObjectId.isValid(studentId)) {
-                const sObj = await Student.findById(studentId);
-                if (sObj) studentRollno = sObj.rollno;
-            }
-            if (studentRollno) {
-                const assigned = await TestAssignment.findOne({
-                    testId: examId,
-                    rollno: studentRollno
-                });
-                if (!assigned) {
-                    return res.status(403).json({
-                        message: 'You are not assigned to take this exam.'
-                    });
+        // 1. Validate student assignment & targeting access
+        const target = await TestTarget.findOne({ testId: examId });
+        let hasTargetAccess = true;
+
+        let studentRollno = reqRollno;
+        let studentObj = null;
+        if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
+            studentObj = await Student.findById(studentId);
+            if (studentObj) studentRollno = studentObj.rollno;
+        }
+
+        if (target) {
+            if (target.targetType === "Department" && target.departments?.length > 0) {
+                if (!studentObj?.department || !target.departments.includes(studentObj.department)) {
+                    hasTargetAccess = false;
+                }
+            } else if (target.targetType === "Batch" && target.batches?.length > 0) {
+                if (!studentObj?.batch || !target.batches.includes(studentObj.batch)) {
+                    hasTargetAccess = false;
+                }
+            } else if (target.targetType === "SpecificStudents" && target.studentRollNumbers?.length > 0) {
+                if (!studentRollno || !target.studentRollNumbers.includes(studentRollno)) {
+                    hasTargetAccess = false;
                 }
             }
+        }
+
+        const assignmentCount = await TestAssignment.countDocuments({ testId: examId });
+        let isExplicitlyAssigned = false;
+        if (studentRollno) {
+            const assignedRecord = await TestAssignment.findOne({ testId: examId, rollno: studentRollno });
+            if (assignedRecord) isExplicitlyAssigned = true;
+        }
+
+        // If assignments exist but target is "All" or matches student, or explicitly assigned, allow access
+        if (assignmentCount > 0 && !isExplicitlyAssigned && !hasTargetAccess) {
+            return res.status(403).json({
+                message: 'You are not assigned to take this exam.'
+            });
         }
 
         // 2. Check Test Schedule if schedules exist
@@ -64,7 +85,7 @@ const startExam = async (req, res) => {
                 const upcoming = schedules.find(s => new Date(s.startAt) > now);
                 if (upcoming) {
                     return res.status(403).json({
-                        message: `Test schedule has not started yet. Exam opens at ${upcoming.startAt}`
+                        message: `Test schedule has not started yet. Exam opens at ${new Date(upcoming.startAt).toLocaleString()}`
                     });
                 }
                 return res.status(403).json({

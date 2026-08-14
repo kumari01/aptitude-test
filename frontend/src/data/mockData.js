@@ -3,108 +3,31 @@
    ===================================================================== */
 export const USER = { name: "John Student", roll: "23K61A4228" };
 
-export const LIVE_EXAM = {
-  id: "6a7de002b676832d3826d231",
-  title: "Sample Aptitude & Technical Benchmark Exam",
-  questions: 5,
-  minutes: 30,
-  due: "Sunday, Jul 27 · 11:59 PM",
-};
+export const LIVE_EXAM = null;
 
 export const STATS = {
-  rank: "#4",
-  rankDelta: "Up 2 from last week",
-  avgScore: "74%",
-  avgDelta: "+5% this month",
-  completed: "11/12",
-  best: "92%",
+  rank: "--",
+  rankDelta: "No active rank",
+  avgScore: "0%",
+  avgDelta: "0%",
+  completed: "0",
+  best: "0%",
 };
 
-export const LEADERBOARD = [
-  { rank: 1, name: "Priya Sharma", roll: "21B01A0512", score: 92 },
-  { rank: 2, name: "Rahul Verma", roll: "21B01A0534", score: 88 },
-  { rank: 3, name: "Anitha K", roll: "21B01A0507", score: 85 },
-  { rank: 4, name: "Sai Kumar", roll: "21B01A0542", score: 82, isYou: true },
-  { rank: 5, name: "Deepika R", roll: "21B01A0519", score: 78 },
-];
+export const LEADERBOARD = [];
 
-export const RECENT_WEEKS = [
-  { week: "Week 11", marks: "74/30 marks", pct: "247%", status: "Passed" },
-  { week: "Week 10", marks: "82/30 marks", pct: "273%", status: "Passed" },
-  { week: "Week 9", marks: "56/30 marks", pct: "187%", status: "Failed" },
-];
+export const RECENT_WEEKS = [];
 
 export const RESULTS_STATS = {
-  totalAttempts: 5,
-  passed: 3,
-  avgScore: "64%",
-  best: "88%",
+  totalAttempts: 0,
+  passed: 0,
+  avgScore: "0%",
+  best: "0%",
 };
 
-export const RESULTS_LIST = [
-  {
-    id: 1,
-    title: "Verbal Reasoning - Set A",
-    category: "Verbal",
-    detail: "24 correct, 4 wrong, 2 skipped",
-    date: "Jul 20, 2026",
-    score: "80%",
-    fraction: "24/30",
-    time: "38 min",
-    status: "Passed",
-  },
-  {
-    id: 2,
-    title: "Quantitative Aptitude - Basic",
-    category: "Aptitude",
-    detail: "18 correct, 5 wrong, 2 skipped",
-    date: "Jul 18, 2026",
-    score: "72%",
-    fraction: "18/25",
-    time: "35 min",
-    status: "Passed",
-  },
-  {
-    id: 3,
-    title: "Logical Reasoning - Patterns",
-    category: "Reasoning",
-    detail: "8 correct, 10 wrong, 2 skipped",
-    date: "Jul 15, 2026",
-    score: "40%",
-    fraction: "8/20",
-    time: "28 min",
-    status: "Failed",
-  },
-  {
-    id: 4,
-    title: "Verbal Ability - Synonyms",
-    category: "Verbal",
-    detail: "22 correct, 2 wrong, 1 skipped",
-    date: "Jul 12, 2026",
-    score: "88%",
-    fraction: "22/25",
-    time: "20 min",
-    status: "Passed",
-  },
-  {
-    id: 5,
-    title: "Number Series - Advanced",
-    category: "Aptitude",
-    detail: "6 correct, 9 wrong, 5 skipped",
-    date: "Jul 10, 2026",
-    score: "40%",
-    fraction: "6/15",
-    time: "22 min",
-    status: "Failed",
-  },
-];
+export const RESULTS_LIST = [];
 
-export const EXAMS_LIST = [
-  { id: "6a7de002b676832d3826d231", title: "Sample Aptitude & Technical Benchmark Exam", category: "Aptitude", questions: 5, minutes: 30, live: true },
-  { id: "60d5ecb8b5c9c92b9c8b4567", title: "Verbal Reasoning - Set A", category: "Verbal", questions: 8, minutes: 45, live: false },
-  { id: "60d5ecb8b5c9c92b9c8b4568", title: "Quantitative Aptitude - Basic", category: "Aptitude", questions: 25, minutes: 35, live: false },
-  { id: "60d5ecb8b5c9c92b9c8b4569", title: "Logical Reasoning - Patterns", category: "Reasoning", questions: 20, minutes: 30, live: false },
-];
+export const EXAMS_LIST = [];
 
 export const QUESTIONS = [
   {

@@ -13,7 +13,8 @@ import {
   X,
   Send,
   Lock,
-  ListOrdered
+  ListOrdered,
+  Trash2
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
@@ -113,6 +114,28 @@ export function AdminDashboardPage() {
       console.error("Admin fetch error:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteTest = async (testId) => {
+    if (!window.confirm("Are you sure you want to delete this test?")) return;
+    try {
+      await api.delete(`/test-management/${testId}`);
+      toast.success("Test deleted successfully");
+      fetchAdminData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete test");
+    }
+  };
+
+  const handleClearAllTests = async () => {
+    if (!window.confirm("Are you sure you want to delete ALL tests from the database?")) return;
+    try {
+      await api.delete("/test-management/all");
+      toast.success("All tests cleared successfully");
+      fetchAdminData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to clear tests");
     }
   };
 
@@ -373,9 +396,19 @@ export function AdminDashboardPage() {
           <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
             Managed Examinations
           </h3>
-          <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-            {tests.length} Total Exams
-          </span>
+          <div className="flex items-center gap-3">
+            {tests.length > 0 && (
+              <button
+                onClick={handleClearAllTests}
+                className="text-xs font-semibold px-3 py-1 rounded-full text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center gap-1 transition-colors"
+              >
+                <Trash2 size={12} /> Clear All Tests
+              </button>
+            )}
+            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+              {tests.length} Total Exams
+            </span>
+          </div>
         </div>
 
         {tests.length === 0 ? (
@@ -451,6 +484,13 @@ export function AdminDashboardPage() {
                     className="flex-1 md:flex-none text-xs font-semibold px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
                   >
                     Schedule
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTest(t.id)}
+                    title="Delete Test"
+                    className="p-2 rounded-lg text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors"
+                  >
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>

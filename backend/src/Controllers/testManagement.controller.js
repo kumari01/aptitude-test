@@ -311,16 +311,34 @@ const listStudentAssignedTests = async (req, res) => {
         // use their own rollno rather than trusting a query param. Otherwise
         // one student could look up another student's assigned tests just
         // by passing a different rollno.
+        let studentObj = null;
         if (req.user?.role === "student") {
-            const student = await Student.findById(req.user.id, { rollno: 1 });
-            rollno = student?.rollno;
+            studentObj = await Student.findById(req.user.id);
+            rollno = studentObj?.rollno;
         }
 
         let query = {};
         if (rollno) {
             const assignments = await TestAssignment.find({ rollno });
-            const testIds = assignments.map(a => a.testId);
-            query = { _id: { $in: testIds } };
+            const assignedTestIds = assignments.map(a => a.testId);
+
+            const targets = await TestTarget.find({
+                $or: [
+                    { targetType: "All" },
+                    { targetType: "Department", departments: studentObj?.department || "" },
+                    { targetType: "Batch", batches: studentObj?.batch || "" },
+                    { targetType: "SpecificStudents", studentRollNumbers: rollno }
+                ]
+            });
+            const targetedTestIds = targets.map(t => t.testId);
+
+            const combinedIds = [...new Set([...assignedTestIds.map(id => id.toString()), ...targetedTestIds.map(id => id.toString())])];
+            query = {
+                _id: { $in: combinedIds },
+                status: "Published"
+            };
+        } else if (req.user?.role === "student") {
+            query = { status: "Published" };
         }
 
         const tests = await Test.find(query);
@@ -342,6 +360,47 @@ const listStudentAssignedTests = async (req, res) => {
     }
 };
 
+// Delete a single test by ID
+const deleteTest = async (req, res) => {
+    try {
+        const { testId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(testId)) {
+            return res.status(400).json({ message: "Invalid test ID" });
+        }
+        await Test.findByIdAndDelete(testId);
+        await TestSetting.deleteMany({ testId });
+        await TestTarget.deleteMany({ testId });
+        await TestSchedule.deleteMany({ testId });
+        await TestAssignment.deleteMany({ testId });
+        const sections = await Section.find({ testId });
+        const sectionIds = sections.map(s => s._id);
+        await SectionQuestion.deleteMany({ sectionId: { $in: sectionIds } });
+        await Section.deleteMany({ testId });
+
+        res.status(200).json({ message: "Test deleted successfully" });
+    } catch (err) {
+        console.error("Error deleting test:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+// Delete all tests from database
+const deleteAllTests = async (req, res) => {
+    try {
+        await Test.deleteMany({});
+        await TestSetting.deleteMany({});
+        await TestTarget.deleteMany({});
+        await TestSchedule.deleteMany({});
+        await TestAssignment.deleteMany({});
+        await Section.deleteMany({});
+        await SectionQuestion.deleteMany({});
+        res.status(200).json({ message: "All tests deleted successfully" });
+    } catch (err) {
+        console.error("Error clearing tests:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 module.exports = {
     createTest,
     updateTestSettings,
@@ -350,5 +409,7 @@ module.exports = {
     createSection,
     addQuestionToSection,
     getTestDetails,
-    listStudentAssignedTests
+    listStudentAssignedTests,
+    deleteTest,
+    deleteAllTests
 };

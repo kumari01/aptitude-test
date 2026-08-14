@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Clock, Flag, ChevronLeft, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
-import { EXAMS_LIST, QUESTIONS as MOCK_QUESTIONS } from "../data/mockData";
 import { formatTime } from "../utils/formatters";
 import { BRAND, BRAND_TINT, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
 import api from "../api/axios";
@@ -10,17 +9,16 @@ export function ExamTakingPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
 
-  const fallbackExam = EXAMS_LIST.find((e) => e.id === Number(examId)) || EXAMS_LIST[0];
-
-  const [exam, setExam] = useState(fallbackExam);
-  const [questions, setQuestions] = useState(MOCK_QUESTIONS);
+  const [exam, setExam] = useState({ title: "Exam", minutes: 30 });
+  const [questions, setQuestions] = useState([]);
   const [attemptId, setAttemptId] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [autoSubmittedAlert, setAutoSubmittedAlert] = useState(false);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [seconds, setSeconds] = useState(fallbackExam.minutes * 60);
+  const [seconds, setSeconds] = useState(1800);
   const timerRef = useRef(null);
 
   // Initialize test attempt from API
@@ -28,6 +26,7 @@ export function ExamTakingPage() {
     async function initExam() {
       try {
         setLoading(true);
+        setErrorMsg("");
         const res = await api.post(`/exams/${examId}/start`);
         if (res.data) {
           const { attempt, exam: examData, questions: qData, isTimeExpired, remainingSeconds } = res.data;
@@ -63,6 +62,8 @@ export function ExamTakingPage() {
               marks: q.marks || 1,
             }));
             setQuestions(formatted);
+          } else {
+            setQuestions([]);
           }
 
           // Calculate remaining duration from server response or start time
@@ -77,7 +78,7 @@ export function ExamTakingPage() {
           }
 
           // Fetch pre-saved answers if resuming attempt
-          if (attempt?._id) {
+          if (attempt?._id && qData?.length > 0) {
             try {
               const answersRes = await api.get(`/answers/attempt/${attempt._id}`);
               if (answersRes.data?.answers) {
@@ -99,7 +100,9 @@ export function ExamTakingPage() {
           }
         }
       } catch (err) {
-        console.warn("Using local mock test session fallback:", err);
+        console.warn("Error initializing test session:", err);
+        setErrorMsg(err.response?.data?.message || "Failed to initialize test session");
+        setQuestions([]);
       } finally {
         setLoading(false);
       }
@@ -209,7 +212,30 @@ export function ExamTakingPage() {
     );
   }
 
-  const q = questions[current] || questions[0];
+  if (errorMsg || questions.length === 0 || !questions[current]) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
+        <div className="bg-white rounded-2xl border border-gray-200 p-8 max-w-md w-full text-center shadow-sm">
+          <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle size={28} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Unable to Start Exam</h2>
+          <p className="text-sm text-gray-500 mb-6 font-medium">
+            {errorMsg || "No questions found for this exam."}
+          </p>
+          <button
+            onClick={() => navigate("/exams")}
+            className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl shadow-sm hover:opacity-90 transition-opacity"
+            style={{ background: BRAND }}
+          >
+            <ChevronLeft size={16} /> Return to Exams List
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const q = questions[current];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col" style={{ fontFamily: FONT_BODY }}>

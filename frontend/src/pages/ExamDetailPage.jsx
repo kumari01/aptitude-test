@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronLeft, FileText, Clock, CheckCircle2, AlertTriangle, ArrowRight, ShieldAlert } from "lucide-react";
-import { EXAMS_LIST, QUESTIONS as MOCK_QUESTIONS } from "../data/mockData";
+import { ChevronLeft, FileText, Clock, CheckCircle2, AlertTriangle, ArrowRight, ShieldAlert, AlertCircle } from "lucide-react";
 import { BRAND, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 
@@ -9,15 +8,18 @@ export function ExamDetailPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
 
-  const fallbackExam = EXAMS_LIST.find((e) => e.id === Number(examId)) || EXAMS_LIST[0];
-  const [exam, setExam] = useState(fallbackExam);
+  const [exam, setExam] = useState(null);
   const [setting, setSetting] = useState(null);
   const [sections, setSections] = useState([]);
-  const [questionCount, setQuestionCount] = useState(MOCK_QUESTIONS.length);
+  const [questionCount, setQuestionCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     async function fetchTestDetails() {
       try {
+        setLoading(true);
+        setError(false);
         const res = await api.get(`/test-management/${examId}`);
         if (res.data?.test) {
           const { test: testData, setting: setObj, sections: secList } = res.data;
@@ -25,14 +27,25 @@ export function ExamDetailPage() {
             id: testData._id,
             title: testData.title,
             category: testData.testType || "Aptitude",
-            minutes: testData.duration_minutes || 30,
+            minutes: testData.duration_minutes || testData.durationMinutes || 30,
             totalMarks: testData.totalMarks || 10,
           });
           if (setObj) setSetting(setObj);
-          if (secList) setSections(secList);
+          if (secList) {
+            setSections(secList);
+            const totalQ = secList.reduce((acc, s) => acc + (s.questions?.length || 0), 0);
+            setQuestionCount(totalQ || testData.totalMarks || 10);
+          } else {
+            setQuestionCount(testData.totalMarks || 10);
+          }
+        } else {
+          setError(true);
         }
       } catch (err) {
-        console.warn("Using mock exam detail fallback:", err);
+        console.warn("Error fetching exam details:", err);
+        setError(true);
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -40,8 +53,41 @@ export function ExamDetailPage() {
   }, [examId]);
 
   const handleBeginExam = () => {
+    if (questionCount === 0) {
+      alert("This exam does not have any questions added yet. Please ask your administrator to add questions before taking it.");
+      return;
+    }
     navigate(`/exams/${examId}/take`);
   };
+
+  if (loading) {
+    return (
+      <div className="px-4 sm:px-6 md:px-10 py-12 max-w-4xl mx-auto text-center text-gray-500">
+        Loading test details...
+      </div>
+    );
+  }
+
+  if (error || !exam) {
+    return (
+      <div className="px-4 sm:px-6 md:px-10 py-12 max-w-xl mx-auto text-center">
+        <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+          <AlertCircle size={28} />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Test Not Found</h2>
+        <p className="text-sm text-gray-500 mb-6">
+          The requested test is not available or has not been assigned to you.
+        </p>
+        <button
+          onClick={() => navigate("/exams")}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold text-sm"
+          style={{ background: BRAND }}
+        >
+          <ChevronLeft size={16} /> Back to Exams
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 sm:px-6 md:px-10 py-6 max-w-4xl mx-auto">

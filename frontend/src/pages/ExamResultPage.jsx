@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, RotateCcw } from "lucide-react";
-import { EXAMS_LIST, QUESTIONS } from "../data/mockData";
 import { INK, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 
@@ -10,14 +9,12 @@ export function ExamResultPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const exam = EXAMS_LIST.find((e) => e.id === Number(examId)) || EXAMS_LIST[0];
-
   const state = location.state || {};
   const [resultData, setResultData] = useState({
-    correct: state.correct ?? 6,
-    total: state.total ?? QUESTIONS.length,
-    answeredCount: state.answeredCount ?? 7,
-    percentage: state.percentage ?? Math.round(((state.correct ?? 6) / (state.total ?? QUESTIONS.length)) * 100),
+    correct: state.correct ?? 0,
+    total: state.total ?? 0,
+    answeredCount: state.answeredCount ?? 0,
+    percentage: state.percentage ?? (state.total ? Math.round(((state.correct ?? 0) / state.total) * 100) : 0),
     status: state.isAutoSubmitted ? 'Time Expired' : 'Submitted'
   });
 
@@ -28,7 +25,7 @@ export function ExamResultPage() {
           if (res.data) {
             setResultData({
               correct: res.data.correctCount ?? state.correct ?? 0,
-              total: res.data.totalMarks ?? state.total ?? QUESTIONS.length,
+              total: res.data.totalMarks ?? state.total ?? 0,
               answeredCount: res.data.answeredCount ?? state.answeredCount ?? 0,
               percentage: res.data.percentage ?? 0,
               status: res.data.status || (state.isAutoSubmitted ? 'Time Expired' : 'Submitted')

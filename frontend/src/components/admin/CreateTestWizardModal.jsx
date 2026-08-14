@@ -347,6 +347,19 @@ export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished
     downloadAnchor.remove();
   };
 
+  const handleLoadSampleQuestions = () => {
+    const normalized = SAMPLE_JSON_BANK.map((q, idx) => ({
+      id: `sample_${Date.now()}_${idx}`,
+      question_text: q.question_text,
+      topicName: q.topicName || "General",
+      options: q.options.map(o => ({ text: o })),
+      correct_answer: q.correct_answer,
+      marks: q.marks || 1
+    }));
+    setQuestionsList(prev => [...prev, ...normalized]);
+    toast.success(`Loaded ${normalized.length} sample questions into list!`);
+  };
+
   const handleStep3Submit = async (e) => {
     e.preventDefault();
     if (!createdTestId) {
@@ -792,18 +805,27 @@ export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished
                   </div>
 
                   {/* Download Sample JSON button */}
-                  <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
                     <span className="text-xs text-slate-600 flex items-center gap-1.5 font-medium">
                       <Sparkles size={14} className="text-amber-500" />
-                      Need a sample JSON schema format?
+                      Quick sample questions or schema format:
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleDownloadSampleJSON}
-                      className="flex items-center gap-1.5 text-xs font-bold text-red-700 hover:text-red-900 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100"
-                    >
-                      <Download size={14} /> Download Sample JSON
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleLoadSampleQuestions}
+                        className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200"
+                      >
+                        <Sparkles size={14} /> Auto-Load Sample Questions
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDownloadSampleJSON}
+                        className="flex items-center gap-1.5 text-xs font-bold text-red-700 hover:text-red-900 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100"
+                      >
+                        <Download size={14} /> Download Sample JSON
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
