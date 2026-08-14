@@ -25,7 +25,7 @@ const createQuestion = async(req,res) =>{
             exam_id: examId,
             question_text,
             options,
-            marks: 1
+            marks: marks || 1
         });
 
         question.correct_option_id = question.options[answerIndex]._id;
