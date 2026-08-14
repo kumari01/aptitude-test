@@ -2,6 +2,7 @@ const studentAnswerSchema = require("../model/studentAnswer.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
 const questionModel = require("../model/question.model");
 const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
+const { submitAttempt } = require('../services/attempt.service');
 const {
     generateLeaderboard
 } = require("./leaderboard.controller");
@@ -98,60 +99,33 @@ const getStudentAnswers = async (req, res) => {
 const submitExam = async (req, res) => {
     try {
         const { attemptId } = req.body;
+
         if (!attemptId) {
-            return res.status(400).json({ message: 'attemptId is required' });
+            return res.status(400).json({
+                message: "attemptId is required"
+            });
         }
 
-        const attempt = await ExamAttempt.findById(attemptId);
-        if (!attempt) {
-            return res.status(404).json({ message: 'Attempt not found' });
-        }
+        const result = await submitAttempt(
+            attemptId,
+            "Submitted"
+        );
 
-        if (attempt.status === 'Submitted') {
-            return res.status(400).json({ message: 'Attempt has already been submitted' });
-        }
+        // Update leaderboard after successful submission
+        await generateLeaderboard(result.attempt.exam_id);
 
-        const targetTestId = attempt.testId || attempt.exam_id;
-        const questions = await questionModel.find({
-            $or: [{ testId: targetTestId }, { exam_id: targetTestId }]
-        });
-        const answers = await studentAnswerSchema.find({ attempt_id: attemptId });
-
-        let totalScore = 0;
-        let totalPossibleMarks = 0;
-
-        for (const question of questions) {
-            const qMarks = 1; // 1 point per question
-            totalPossibleMarks += qMarks;
-
-            const studentAns = answers.find(a => a.question_id.toString() === question._id.toString());
-            if (studentAns) {
-                const isCorrect = question.correct_option_id && studentAns.selected_option_id && question.correct_option_id.toString() === studentAns.selected_option_id.toString();
-                studentAns.is_correct = isCorrect;
-                studentAns.marks_awarded = isCorrect ? qMarks : 0;
-                await studentAns.save();
-
-                if (isCorrect) {
-                    totalScore += qMarks;
-                }
-            }
-        }
-
-        attempt.score = totalScore;
-        attempt.status = 'Submitted';
-        attempt.submitted_at = new Date();
-        await attempt.save();
-        await generateLeaderboard(attempt.exam_id);
-
-        res.status(200).json({
-            message: 'Exam submitted successfully',
-            score: totalScore,
-            totalMarks: totalPossibleMarks,
-            attempt
+        return res.status(200).json({
+            message: "Exam submitted successfully",
+            score: result.score,
+            totalMarks: result.totalMarks,
+            attempt: result.attempt
         });
     } catch (err) {
-        console.error('Error submitting exam:', err);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error("Error submitting exam:", err);
+
+        return res.status(400).json({
+            message: err.message
+        });
     }
 };
 
