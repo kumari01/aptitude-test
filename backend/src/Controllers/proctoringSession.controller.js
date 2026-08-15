@@ -6,7 +6,8 @@ const {
 
 const createSession = async (req, res) => {
   try {
-    const session = await createProctoringSession();
+    const { attemptId } = req.body;
+    const session = await createProctoringSession(attemptId);
 
     return res.status(201).json({
       success: true,

@@ -1,13 +1,18 @@
 const ProctoringSession = require("../model/proctoring/proctoringSession");
 
-const createProctoringSession = async () => {
+const createProctoringSession = async (attemptId = null) => {
   const session = await ProctoringSession.create({
+    attemptId,
     riskScore: 0,
     tabSwitchCount: 0,
     status: "ACTIVE",
   });
 
   return session;
+};
+
+const findProctoringSessionByAttemptId = async (attemptId) => {
+  return ProctoringSession.findOne({ attemptId });
 };
 
 const getProctoringSession = async (sessionId) => {
@@ -41,6 +46,7 @@ const endProctoringSession = async (sessionId) => {
 
 module.exports = {
   createProctoringSession,
+  findProctoringSessionByAttemptId,
   getProctoringSession,
   endProctoringSession,
 };
