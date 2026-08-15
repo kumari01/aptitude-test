@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
-import axios from "axios";
+import api from "../../api/axios";
 
 export function TopBar() {
   const navigate = useNavigate();
@@ -24,14 +24,7 @@ export function TopBar() {
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const response = await axios.get(
-          "http://localhost:3000/api/auth/student/profile",
-          {
-            withCredentials: true,
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          }
-        );
+        const response = await api.get("/auth/student/profile");
 
         if (response.data?.student?.username) {
           setUserName(response.data.student.username);

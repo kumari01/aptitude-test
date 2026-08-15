@@ -115,8 +115,13 @@ const scheduleTest = async (req, res) => {
             rollNumbersToAssign = students.map(s => s.rollno);
         }
 
+        // Filter out invalid/empty roll numbers to avoid broken assignments
+        const validRollNumbers = rollNumbersToAssign.filter(
+            (roll) => roll && typeof roll === "string" && roll.trim().length > 0
+        );
+
         const assignments = [];
-        for (const roll of rollNumbersToAssign) {
+        for (const roll of validRollNumbers) {
             const assignment = await TestAssignment.findOneAndUpdate(
                 { testId, scheduleId: schedule._id, rollNumber: roll },
                 { attemptLimit: test.maxAttempts || 1, status: "Assigned" },
@@ -228,7 +233,7 @@ const getTestDetails = async (req, res) => {
             sections: sectionDetails
         });
     } catch (err) {
-        console.error("Error retrieving test details:", err);
+        console.error("Error retrieving test details:", err.message);
         res.status(500).json({ message: "Internal server error" });
     }
 };
@@ -236,15 +241,17 @@ const getTestDetails = async (req, res) => {
 // List tests assigned to a student
 const listStudentAssignedTests = async (req, res) => {
     try {
-        const rollNumber = req.query.rollNumber || req.query.rollno;
-        let query = {};
-        if (rollNumber) {
-            const assignments = await TestAssignment.find({ rollNumber });
-            const testIds = assignments.map(a => a.testId);
-            query = { _id: { $in: testIds } };
+        // Resolve the authenticated student's roll number
+        const student = await Student.findById(req.user.id);
+        if (!student) {
+            return res.status(404).json({ message: "Student not found" });
         }
 
-        const tests = await Test.find(query);
+        const rollNumber = student.rollno;
+        const assignments = await TestAssignment.find({ rollNumber });
+        const testIds = assignments.map(a => a.testId);
+
+        const tests = await Test.find({ _id: { $in: testIds } });
         const detailedTests = [];
         for (const t of tests) {
             const setting = await TestSetting.findOne({ testId: t._id });

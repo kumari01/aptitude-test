@@ -35,8 +35,8 @@ export function ExamTakingPage() {
             setExam({
               id: examData._id,
               title: examData.title,
-              minutes: examData.duration_minutes || 30,
-              totalMarks: examData.total_marks || 10,
+              minutes: 30,
+              totalMarks: examData.totalMarks || 10,
             });
           }
           if (qData && qData.length > 0) {
@@ -50,10 +50,10 @@ export function ExamTakingPage() {
             setQuestions(formatted);
           }
 
-          // Calculate remaining duration based on start time
-          if (attempt?.started_at && examData?.duration_minutes) {
+          // Calculate remaining duration based on start time (30 min default)
+          if (attempt?.started_at) {
             const startTime = new Date(attempt.started_at).getTime();
-            const totalDurationMs = (examData.duration_minutes || 30) * 60 * 1000;
+            const totalDurationMs = 30 * 60 * 1000;
             const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
             const remaining = Math.max(0, Math.floor(totalDurationMs / 1000) - elapsedSeconds);
             setSeconds(remaining);
@@ -106,18 +106,14 @@ export function ExamTakingPage() {
       }
     }
 
-    let correct = 0;
-    questions.forEach((q, i) => {
-      if (answers[i] === q.answer) correct += 1;
-    });
     const answeredCount = Object.keys(answers).length;
 
     navigate(`/exams/${examId}/result`, {
       state: {
         attemptId,
-        correct: submitResult?.correctCount ?? correct,
+        correct: submitResult?.score ?? answeredCount,
         total: submitResult?.totalMarks ?? questions.length,
-        answeredCount: submitResult?.answeredCount ?? answeredCount,
+        answeredCount,
         score: submitResult?.score,
         percentage: submitResult?.percentage,
         examTitle: exam.title,

@@ -11,31 +11,23 @@ import {
   Trophy,
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
-import { LIVE_EXAM, STATS, LEADERBOARD, RECENT_WEEKS } from "../data/mockData";
+import { STATS, LEADERBOARD, RECENT_WEEKS } from "../data/mockData";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
-//import axios
-import axios from "axios";
+import api from "../api/axios";
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const [student, setStudent] = useState(null);
   const [progress, setProgress] = useState(null);
+  const [liveExam, setLiveExam] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-        const [profileRes, progressRes] = await Promise.all([
-          axios.get("http://localhost:3000/api/auth/student/profile", {
-            withCredentials: true,
-            headers,
-          }),
-          axios.get("http://localhost:3000/api/auth/student/progress", {
-            withCredentials: true,
-            headers,
-          }).catch(() => null),
+        const [profileRes, progressRes, assignedRes] = await Promise.all([
+          api.get("/auth/student/profile"),
+          api.get("/auth/student/progress").catch(() => null),
+          api.get("/test-management/student/assigned").catch(() => null),
         ]);
 
         if (profileRes?.data?.student) {
@@ -43,6 +35,19 @@ export function DashboardPage() {
         }
         if (progressRes?.data) {
           setProgress(progressRes.data);
+        }
+        // Use the first assigned test for the LIVE banner
+        if (assignedRes?.data?.tests && assignedRes.data.tests.length > 0) {
+          const first = assignedRes.data.tests[0];
+          setLiveExam({
+            id: first.test._id,
+            title: first.test.title,
+            questions: 10,
+            minutes: 30,
+            due: first.schedule?.endAt
+              ? new Date(first.schedule.endAt).toLocaleDateString()
+              : "Scheduled",
+          });
         }
       } catch (error) {
         console.error("Dashboard fetch error:", error);
@@ -86,23 +91,24 @@ export function DashboardPage() {
             <span className="text-gray-400 text-sm">This Week's Exam</span>
           </div>
           <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: FONT_DISPLAY }}>
-            {LIVE_EXAM.title}
+            {liveExam ? liveExam.title : "No exams assigned yet"}
           </h2>
           <div className="flex flex-wrap items-center gap-4 sm:gap-5 text-gray-400 text-sm">
             <span className="flex items-center gap-1.5">
-              <FileText size={15} /> {LIVE_EXAM.questions} questions
+              <FileText size={15} /> {liveExam ? liveExam.questions : 0} questions
             </span>
             <span className="flex items-center gap-1.5">
-              <Clock size={15} /> {LIVE_EXAM.minutes} minutes
+              <Clock size={15} /> {liveExam ? liveExam.minutes : 0} minutes
             </span>
             <span className="flex items-center gap-1.5">
-              <Calendar size={15} /> Due {LIVE_EXAM.due}
+              <Calendar size={15} /> Due {liveExam ? liveExam.due : "—"}
             </span>
           </div>
         </div>
         <button
-          onClick={() => handleStartExam(LIVE_EXAM.id)}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0"
+          onClick={() => liveExam && handleStartExam(liveExam.id)}
+          disabled={!liveExam}
+          className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50"
           style={{ background: BRAND }}
         >
           Take Exam <ArrowRight size={16} />

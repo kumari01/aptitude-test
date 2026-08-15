@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronLeft, FileText, Clock, CheckCircle2, AlertTriangle, ArrowRight, ShieldAlert } from "lucide-react";
-import { EXAMS_LIST, QUESTIONS as MOCK_QUESTIONS } from "../data/mockData";
+// import { EXAMS_LIST, QUESTIONS as MOCK_QUESTIONS } from "../data/mockData";
 import { BRAND, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 
@@ -9,11 +9,10 @@ export function ExamDetailPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
 
-  const fallbackExam = EXAMS_LIST.find((e) => e.id === Number(examId)) || EXAMS_LIST[0];
-  const [exam, setExam] = useState(fallbackExam);
+  const [exam, setExam] = useState({ title: "Loading...", category: "Aptitude", minutes: 30, totalMarks: 0 });
   const [setting, setSetting] = useState(null);
   const [sections, setSections] = useState([]);
-  const [questionCount, setQuestionCount] = useState(MOCK_QUESTIONS.length);
+  const [questionCount, setQuestionCount] = useState(0);
 
   useEffect(() => {
     async function fetchTestDetails() {
@@ -25,17 +24,25 @@ export function ExamDetailPage() {
             id: testData._id,
             title: testData.title,
             category: testData.testType || "Aptitude",
-            minutes: 20,
+            minutes: 30,
             totalMarks: testData.totalMarks || 10,
           });
           if (setObj) setSetting(setObj);
-          if (secList) setSections(secList);
+          if (secList) {
+            setSections(secList);
+            // Count questions from sections (each section has a questions array)
+            const totalQuestions = secList.reduce(
+              (sum, sec) => sum + (sec.questions?.length || 0),
+              0
+            );
+            if (totalQuestions > 0) setQuestionCount(totalQuestions);
+          }
         }
       } catch (err) {
-        console.warn("Using mock exam detail fallback:", err);
+        console.warn("Using mock exam detail fallback:", err.message);
       }
     }
-
+    
     fetchTestDetails();
   }, [examId]);
 
