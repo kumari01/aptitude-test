@@ -1,5 +1,6 @@
 const ProctoringSession = require("../model/proctoring/proctoringSession");
 const ProctoringEvent = require("../model/proctoring/proctoringEvent");
+const ExamAttempt = require("../model/testModel/testAttempt.model");
 const { submitAttempt } = require("./attempt.service");
 
 const EVENT_SEVERITY = {
@@ -67,8 +68,8 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
             }
         );
 
-        // 6. Fourth tab switch = automatic submission
-        if (updatedSession.tabSwitchCount >= 4) {
+        // 3rd TAB_SWITCH = automatic submission
+        if (updatedSession.tabSwitchCount >= 3) {
 
             if (!updatedSession.attemptId) {
                 throw new Error(
@@ -76,11 +77,23 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
                 );
             }
 
-            // 7. Automatically submit the attempt
-            await submitAttempt(
-                updatedSession.attemptId,
-                "Auto Submitted"
-            );
+            // Check if attempt is already submitted/auto-submitted
+            if (updatedSession.attemptId) {
+                const attempt = await ExamAttempt.findById(updatedSession.attemptId);
+                if (!attempt) {
+                    throw new Error("Proctoring session references a non-existent attempt");
+                }
+                if (
+                    attempt.status === "Submitted" ||
+                    attempt.status === "Auto Submitted" ||
+                    attempt.status === "Time Expired"
+                ) {
+                    throw new Error("Attempt has already been submitted or auto-submitted");
+                }
+            }
+
+            // 7. Automatically submit the attempt using shared submission service
+            await submitAttempt(updatedSession.attemptId, "Auto Submitted");
 
             // 8. Terminate proctoring session
             updatedSession.status = "TERMINATED";
