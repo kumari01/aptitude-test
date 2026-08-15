@@ -54,6 +54,56 @@ const createTest = async (req, res) => {
     }
 };
 
+// Update test target group (All / Department / Batch / SpecificStudents)
+const updateTestTarget = async (req, res) => {
+    try {
+        const { testId } = req.params;
+        const { targetType, departments, batches, studentRollNumbers } = req.body;
+
+        const target = await TestTarget.findOneAndUpdate(
+            { testId },
+            {
+                targetType: targetType || "All",
+                departments: departments || [],
+                batches: batches || [],
+                studentRollNumbers: studentRollNumbers || []
+            },
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
+        );
+
+        res.status(200).json({
+            message: "Test target updated successfully",
+            target
+        });
+    } catch (err) {
+        console.error("Error updating test target:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+// List ALL tests (admin dashboard view) with settings & schedules
+const listAllTests = async (req, res) => {
+    try {
+        const tests = await Test.find().sort({ createdAt: -1 });
+
+        const detailedTests = [];
+        for (const t of tests) {
+            const setting = await TestSetting.findOne({ testId: t._id });
+            const schedule = await TestSchedule.findOne({ testId: t._id }).sort({ createdAt: -1 });
+            detailedTests.push({
+                test: t,
+                setting,
+                schedule
+            });
+        }
+
+        res.status(200).json({ tests: detailedTests });
+    } catch (err) {
+        console.error("Error listing all tests:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 // Update test proctoring & evaluation settings
 const updateTestSettings = async (req, res) => {
     try {
@@ -272,6 +322,8 @@ const listStudentAssignedTests = async (req, res) => {
 
 module.exports = {
     createTest,
+    updateTestTarget,
+    listAllTests,
     updateTestSettings,
     scheduleTest,
     createSection,

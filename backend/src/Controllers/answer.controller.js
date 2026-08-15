@@ -26,6 +26,13 @@ const saveStudentAnswer = async (req, res) => {
             });
         }
 
+        // Authorization: student must own this attempt
+        if (attempt.student_id.toString() !== req.user.id) {
+            return res.status(403).json({
+                message: 'Forbidden: You do not own this attempt'
+            });
+        }
+
         // Check if attempt is active
         if (attempt.status === 'Submitted' || attempt.status === 'Time Expired') {
             return res.status(400).json({
@@ -83,6 +90,19 @@ const saveStudentAnswer = async (req, res) => {
 const getStudentAnswers = async (req, res) => {
     try {
         const { attemptId } = req.params;
+
+        const attempt = await ExamAttempt.findById(attemptId);
+        if (!attempt) {
+            return res.status(404).json({ message: 'Attempt not found' });
+        }
+
+        // Authorization: student must own this attempt
+        if (attempt.student_id.toString() !== req.user.id) {
+            return res.status(403).json({
+                message: 'Forbidden: You do not own this attempt'
+            });
+        }
+
         const answers = await studentAnswerSchema.find({ attempt_id: attemptId });
         res.status(200).json({
             answers
@@ -103,6 +123,18 @@ const submitExam = async (req, res) => {
         if (!attemptId) {
             return res.status(400).json({
                 message: "attemptId is required"
+            });
+        }
+
+        // Authorization: student must own this attempt
+        const attempt = await ExamAttempt.findById(attemptId);
+        if (!attempt) {
+            return res.status(404).json({ message: 'Attempt not found' });
+        }
+
+        if (attempt.student_id.toString() !== req.user.id) {
+            return res.status(403).json({
+                message: 'Forbidden: You do not own this attempt'
             });
         }
 
@@ -137,6 +169,13 @@ const getResults = async (req, res) => {
         const attempt = await ExamAttempt.findById(attemptId);
         if (!attempt) {
             return res.status(404).json({ message: 'Attempt not found' });
+        }
+
+        // Authorization: student must own this attempt
+        if (attempt.student_id.toString() !== req.user.id) {
+            return res.status(403).json({
+                message: 'Forbidden: You do not own this attempt'
+            });
         }
 
         const targetTestId = attempt.testId || attempt.exam_id;

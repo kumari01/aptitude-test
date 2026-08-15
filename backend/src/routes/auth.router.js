@@ -17,7 +17,6 @@ router.get("/student/profile",authenticate, authController.getStudentProfile);
 // Protected student progress
 router.get("/student/progress",authenticate, authController.getStudentProgress);
 
-
 // Admin signup
 router.post("/admin/signup", authController.adminregister);
 

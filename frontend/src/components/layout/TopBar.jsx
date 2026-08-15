@@ -22,6 +22,9 @@ export function TopBar() {
   });
 
   useEffect(() => {
+    const savedAdmin = localStorage.getItem("admin");
+    if (savedAdmin) return; // Admin profile comes from localStorage
+
     const fetchUserProfile = async () => {
       try {
         const response = await api.get("/auth/student/profile");
