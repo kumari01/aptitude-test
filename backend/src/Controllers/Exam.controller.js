@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 const Test = require("../model/testModel/test.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
 const questionModel = require("../model/question.model");
+const {
+  createProctoringSession,
+  findProctoringSessionByAttemptId,
+} = require("../services/proctoringSession.service");
 
 const createExam = async(req,res)=>{
     try{
@@ -60,6 +64,12 @@ const startExam = async(req,res)=>{
             await attempt.save();
         }
 
+        // Find or create the proctoring session linked to this attempt
+        let proctoringSession = await findProctoringSessionByAttemptId(attempt._id);
+        if (!proctoringSession) {
+            proctoringSession = await createProctoringSession(attempt._id);
+        }
+
         // Fetch questions without exposing correct_option_id
         const questions = await questionModel.find(
             { $or: [{ testId: examId }, { exam_id: examId }] },
@@ -69,6 +79,7 @@ const startExam = async(req,res)=>{
         res.status(200).json({
             message: 'Exam started successfully',
             attempt,
+            proctoringSession,
             exam: test,
             test,
             questions
