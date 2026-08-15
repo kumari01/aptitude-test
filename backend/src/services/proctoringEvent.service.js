@@ -13,6 +13,14 @@ const EVENT_SEVERITY = {
     SCREEN_SHARE_STOPPED: "CRITICAL"
 };
 
+// Risk score increment per severity level
+const SEVERITY_RISK_INCREMENT = {
+    LOW: 5,
+    MEDIUM: 10,
+    HIGH: 20,
+    CRITICAL: 30
+};
+
 const createProctoringEvent = async ({ sessionId, eventType }) => {
 
     // 1. Find session
@@ -82,17 +90,26 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
 
     } else {
 
+        // Non-TAB_SWITCH events increase the session risk score
+        const riskIncrement = SEVERITY_RISK_INCREMENT[severity] || 0;
+
         updatedSession = await ProctoringSession.findByIdAndUpdate(
             sessionId,
             {
                 $inc: {
-                    suspiciousActivityCount: 1
+                    riskScore: riskIncrement
                 }
             },
             {
                 returnDocument: 'after'
             }
         );
+
+        // Cap riskScore at 100 (schema max)
+        if (updatedSession.riskScore > 100) {
+            updatedSession.riskScore = 100;
+            await updatedSession.save();
+        }
     }
 
     return {

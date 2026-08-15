@@ -5,8 +5,6 @@ const proctoringSessionSchema = new mongoose.Schema(
     attemptId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "TestAttempt",
-      unique: true,
-      sparse: true,
     },
 
     riskScore: {
