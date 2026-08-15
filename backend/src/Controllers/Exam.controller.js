@@ -34,7 +34,8 @@ const createExam = async(req,res)=>{
 const startExam = async(req,res)=>{
     try{
         const { examId } = req.params;
-        const studentId = req.body.studentId || req.body.student_id;
+        // Use authenticated student identity from JWT, not client-supplied studentId
+        const studentId = req.user.id;
 
         const test = await Test.findById(examId);
         if(!test){
@@ -58,7 +59,7 @@ const startExam = async(req,res)=>{
             attempt = new ExamAttempt({
                 testId: examId,
                 exam_id: examId,
-                student_id: (studentId && mongoose.Types.ObjectId.isValid(studentId)) ? studentId : new mongoose.Types.ObjectId(),
+                student_id: studentId,
                 started_at: new Date()
             });
             await attempt.save();

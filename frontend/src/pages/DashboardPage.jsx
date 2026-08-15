@@ -14,6 +14,7 @@ import StatCard from "../components/common/StatCard";
 import { STATS, LEADERBOARD, RECENT_WEEKS } from "../data/mockData";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
+import AdminDashboardPage from "./AdminDashboardPage";
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -21,7 +22,11 @@ export function DashboardPage() {
   const [progress, setProgress] = useState(null);
   const [liveExam, setLiveExam] = useState(null);
 
+  const isAdmin = !!localStorage.getItem("admin");
+
   useEffect(() => {
+    if (isAdmin) return;
+
     const fetchData = async () => {
       try {
         const [profileRes, progressRes, assignedRes] = await Promise.all([
@@ -62,7 +67,11 @@ export function DashboardPage() {
     };
 
     fetchData();
-  }, [navigate]);
+  }, [navigate, isAdmin]);
+
+  if (isAdmin) {
+    return <AdminDashboardPage />;
+  }
 
   const handleStartExam = (id) => {
     navigate(`/exams/${id}`);
