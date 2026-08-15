@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const controller = require("../Controllers/testManagement.controller");
+const authenticate = require("../Middleware/auth.middleware");
 
 // Create a new test with default settings and targeting
 router.post("/create", controller.createTest);
@@ -18,7 +19,7 @@ router.post("/:testId/sections", controller.createSection);
 router.post("/sections/:sectionId/questions", controller.addQuestionToSection);
 
 // Get complete details of a test (sections, settings, schedules)
-router.get("/student/assigned", controller.listStudentAssignedTests);
+router.get("/student/assigned", authenticate, controller.listStudentAssignedTests);
 router.get("/:testId", controller.getTestDetails);
 
 module.exports = router;

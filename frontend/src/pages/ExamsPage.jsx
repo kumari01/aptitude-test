@@ -1,26 +1,25 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Clock, ArrowRight, ShieldAlert, Calendar } from "lucide-react";
-import { EXAMS_LIST as MOCK_EXAMS } from "../data/mockData";
+import { FileText, Clock, ArrowRight, ShieldAlert, Calendar, Loader2 } from "lucide-react";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 
 export function ExamsPage() {
   const navigate = useNavigate();
-  const [exams, setExams] = useState(MOCK_EXAMS);
-  const [loading, setLoading] = useState(false);
+  const [exams, setExams] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchAssignedTests() {
       try {
         setLoading(true);
         const res = await api.get("/test-management/student/assigned");
-        if (res.data?.tests && res.data.tests.length > 0) {
+        if (res.data?.tests) {
           const formatted = res.data.tests.map(({ test, setting, schedule }) => ({
             id: test._id,
             title: test.title,
             category: test.testType || "Aptitude",
-            minutes: 20,
+            minutes: 30,
             questions: 10,
             live: test.status === "Published",
             proctoring: setting?.proctoringEnabled ?? true,
@@ -31,7 +30,8 @@ export function ExamsPage() {
           setExams(formatted);
         }
       } catch (err) {
-        console.warn("Using mock exam list fallback:", err);
+        console.warn("Could not fetch assigned tests:", err);
+        setExams([]);
       } finally {
         setLoading(false);
       }
@@ -51,50 +51,67 @@ export function ExamsPage() {
       </h1>
       <p className="text-gray-500 mt-1 mb-6">All assigned aptitude tests, practice modules, and upcoming scheduled exams</p>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {exams.map((e) => (
-          <div key={e.id} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span
-                  className="text-[11px] font-bold tracking-wide px-2.5 py-1 rounded-full"
-                  style={{ background: e.live ? BRAND : "#F3F4F6", color: e.live ? "#fff" : "#6B7280" }}
-                >
-                  {e.live ? "LIVE NOW" : e.category.toUpperCase()}
-                </span>
-                {e.proctoring && (
-                  <span className="flex items-center gap-1 text-xs text-amber-600 font-semibold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
-                    <ShieldAlert size={12} /> Proctoring Enabled
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+          <Loader2 className="animate-spin mb-3" size={32} />
+          <p className="font-medium">Loading assigned exams...</p>
+        </div>
+      ) : exams.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">
+          <FileText size={40} className="mx-auto mb-3 text-gray-300" />
+          <h3 className="text-lg font-bold text-gray-900 mb-1" style={{ fontFamily: FONT_DISPLAY }}>
+            No exams assigned yet
+          </h3>
+          <p className="text-sm text-gray-500">
+            You don't have any assigned tests right now. Check back later.
+          </p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-4">
+          {exams.map((e) => (
+            <div key={e.id} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span
+                    className="text-[11px] font-bold tracking-wide px-2.5 py-1 rounded-full"
+                    style={{ background: e.live ? BRAND : "#F3F4F6", color: e.live ? "#fff" : "#6B7280" }}
+                  >
+                    {e.live ? "LIVE NOW" : e.category.toUpperCase()}
                   </span>
-                )}
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3" style={{ fontFamily: FONT_DISPLAY }}>
-                {e.title}
-              </h3>
-              <div className="flex flex-wrap items-center gap-4 text-gray-500 text-sm mb-5">
-                <span className="flex items-center gap-1.5">
-                  <FileText size={14} /> {e.questions} questions
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Clock size={14} /> {e.minutes} minutes
-                </span>
-                {e.tabSwitchLimit && (
-                  <span className="text-xs text-gray-400">
-                    Max {e.tabSwitchLimit} Tab Switches
+                  {e.proctoring && (
+                    <span className="flex items-center gap-1 text-xs text-amber-600 font-semibold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
+                      <ShieldAlert size={12} /> Proctoring Enabled
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-3" style={{ fontFamily: FONT_DISPLAY }}>
+                  {e.title}
+                </h3>
+                <div className="flex flex-wrap items-center gap-4 text-gray-500 text-sm mb-5">
+                  <span className="flex items-center gap-1.5">
+                    <FileText size={14} /> {e.questions} questions
                   </span>
-                )}
+                  <span className="flex items-center gap-1.5">
+                    <Clock size={14} /> {e.minutes} minutes
+                  </span>
+                  {e.tabSwitchLimit && (
+                    <span className="text-xs text-gray-400">
+                      Max {e.tabSwitchLimit} Tab Switches
+                    </span>
+                  )}
+                </div>
               </div>
+              <button
+                onClick={() => handleStartExam(e.id)}
+                className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"
+                style={{ background: INK }}
+              >
+                {e.live ? "Take Exam" : "Start Practice"} <ArrowRight size={15} />
+              </button>
             </div>
-            <button
-              onClick={() => handleStartExam(e.id)}
-              className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"
-              style={{ background: INK }}
-            >
-              {e.live ? "Take Exam" : "Start Practice"} <ArrowRight size={15} />
-            </button>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
