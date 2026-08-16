@@ -383,6 +383,41 @@ const getAdminOverview = async (req, res) => {
     }
 };
 
+// Admin: Fetch all student test attempts for admin dashboard
+const getAdminAttempts = async (req, res) => {
+    try {
+        const attempts = await ExamAttempt.find()
+            .populate("testId", "title testType durationMinutes totalMarks")
+            .populate("student_id", "username name rollno department email")
+            .sort({ updatedAt: -1 })
+            .limit(100);
+
+        const formatted = attempts.map(att => {
+            const student = att.student_id;
+            const test = att.testId;
+            return {
+                id: att._id,
+                studentName: student?.username || student?.name || "Student",
+                rollNumber: att.rollNumber || student?.rollno || "N/A",
+                department: student?.department || "General",
+                testTitle: test?.title || "Assessment",
+                testType: test?.testType || "Aptitude",
+                score: att.score || 0,
+                obtainedMarks: att.obtainedMarks || 0,
+                totalMarks: test?.totalMarks || 0,
+                tabSwitches: att.tab_switches || 0,
+                status: att.status || "Submitted",
+                date: att.submitted_at || att.updatedAt || att.started_at
+            };
+        });
+
+        res.status(200).json({ attempts: formatted });
+    } catch (err) {
+        console.error("Error fetching admin attempts:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 module.exports = {
     createTest,
     updateTestTarget,
@@ -393,5 +428,6 @@ module.exports = {
     addQuestionToSection,
     getTestDetails,
     listStudentAssignedTests,
-    getAdminOverview
+    getAdminOverview,
+    getAdminAttempts
 };

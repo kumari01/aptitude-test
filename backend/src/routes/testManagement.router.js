@@ -31,6 +31,9 @@ router.get("/admin/all", authenticate, requireAdmin, controller.listAllTests);
 // Admin: summary overview metrics
 router.get("/admin/overview", authenticate, requireAdmin, controller.getAdminOverview);
 
+// Admin: all student exam attempts log
+router.get("/admin/attempts", authenticate, requireAdmin, controller.getAdminAttempts);
+
 router.get("/:testId", authenticate, controller.getTestDetails);
 
 module.exports = router;
