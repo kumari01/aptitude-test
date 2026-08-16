@@ -165,51 +165,141 @@ const submitExam = async (req, res) => {
 const getResults = async (req, res) => {
     try {
         const { attemptId } = req.params;
+        const mongoose = require("mongoose");
+        const currentUserId = (req.user?.id || req.user?._id)?.toString();
 
-        const attempt = await ExamAttempt.findById(attemptId);
+        let attempt = null;
+        if (mongoose.Types.ObjectId.isValid(attemptId)) {
+            attempt = await ExamAttempt.findById(attemptId);
+        }
+
+        if (!attempt) {
+            // Try matching attempt by testId / exam_id for the logged in student
+            const testIdQuery = [];
+            if (mongoose.Types.ObjectId.isValid(attemptId)) {
+                const tObjId = new mongoose.Types.ObjectId(attemptId);
+                testIdQuery.push({ testId: tObjId }, { exam_id: tObjId });
+            }
+            testIdQuery.push({ testId: attemptId }, { exam_id: attemptId });
+
+            const studentQuery = [];
+            if (currentUserId) {
+                studentQuery.push({ student_id: currentUserId });
+                if (mongoose.Types.ObjectId.isValid(currentUserId)) {
+                    studentQuery.push({ student_id: new mongoose.Types.ObjectId(currentUserId) });
+                }
+            }
+
+            const searchFilter = { $or: testIdQuery };
+            if (studentQuery.length > 0) {
+                searchFilter.$and = [{ $or: studentQuery }];
+            }
+
+            attempt = await ExamAttempt.findOne(searchFilter).sort({ updatedAt: -1 });
+        }
+
+        // If still no attempt found, try finding ANY attempt for this testId
+        if (!attempt && mongoose.Types.ObjectId.isValid(attemptId)) {
+            const tObjId = new mongoose.Types.ObjectId(attemptId);
+            attempt = await ExamAttempt.findOne({
+                $or: [{ testId: tObjId }, { exam_id: tObjId }, { testId: attemptId }, { exam_id: attemptId }]
+            }).sort({ updatedAt: -1 });
+        }
+
         if (!attempt) {
             return res.status(404).json({ message: 'Attempt not found' });
         }
 
-        // Authorization: student must own this attempt
-        if (attempt.student_id.toString() !== req.user.id) {
-            return res.status(403).json({
-                message: 'Forbidden: You do not own this attempt'
-            });
+        // Authorization check
+        if (currentUserId && attempt.student_id) {
+            const attemptStudentId = attempt.student_id.toString();
+            if (attemptStudentId !== currentUserId) {
+                return res.status(403).json({
+                    message: 'Forbidden: You do not own this attempt'
+                });
+            }
         }
 
-        const targetTestId = attempt.testId || attempt.exam_id;
-        let questions = await questionModel.find({
-            $or: [{ testId: targetTestId }, { exam_id: targetTestId }]
-        });
+        const targetTestId = attempt.testId || attempt.exam_id || attemptId;
+
+        // 1. Fetch questions for this test
+        const qOrList = [];
+        if (mongoose.Types.ObjectId.isValid(targetTestId)) {
+            const testObjId = new mongoose.Types.ObjectId(targetTestId);
+            qOrList.push({ testId: testObjId }, { exam_id: testObjId });
+        }
+        qOrList.push({ testId: targetTestId }, { exam_id: targetTestId }, { testId: targetTestId.toString() }, { exam_id: targetTestId.toString() });
+
+        let questions = await questionModel.find({ $or: qOrList });
+
         if (questions.length === 0) {
             const Section = require("../model/sectionModel/section.model");
             const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
-            const sections = await Section.find({ testId: targetTestId });
+            const sectionOrList = [];
+            if (mongoose.Types.ObjectId.isValid(targetTestId)) {
+                sectionOrList.push({ testId: new mongoose.Types.ObjectId(targetTestId) });
+            }
+            sectionOrList.push({ testId: targetTestId }, { testId: targetTestId.toString() });
+
+            const sections = await Section.find({ $or: sectionOrList });
             const sectionIds = sections.map(s => s._id);
             const secQuestions = await SectionQuestion.find({ sectionId: { $in: sectionIds } });
             if (secQuestions.length > 0) {
-                questions = secQuestions;
+                const questionIds = secQuestions.map(sq => sq.questionId).filter(Boolean);
+                questions = await questionModel.find({ _id: { $in: questionIds } });
             }
         }
-        const answers = await studentAnswerSchema.find({ attempt_id: attemptId });
 
-        const totalMarks = questions.length; // 1 point per question
+        // 2. Fetch all student answers for this attempt
+        const answers = await studentAnswerSchema.find({
+            $or: [{ attempt_id: attempt._id }, { attempt_id: attempt._id.toString() }]
+        });
+
+        if (questions.length === 0 && answers.length > 0) {
+            const answeredQIds = answers.map(a => a.question_id).filter(Boolean);
+            questions = await questionModel.find({ _id: { $in: answeredQIds } });
+        }
+
         let correctCount = 0;
-        let wrongCount = 0;
+        let answeredCount = 0;
 
-        for (const question of questions) {
+        const breakdown = questions.map((question, idx) => {
             const ans = answers.find(a => a.question_id.toString() === question._id.toString());
-            if (ans && ans.selected_option_id) {
-                if (question.correct_option_id && question.correct_option_id.toString() === ans.selected_option_id.toString()) {
-                    correctCount++;
-                } else {
-                    wrongCount++;
-                }
-            }
-        }
+            const selectedOptionId = ans?.selected_option_id ? ans.selected_option_id.toString() : null;
+            const correctOptionId = question.correct_option_id ? question.correct_option_id.toString() : null;
 
-        const answeredCount = answers.filter(a => a.selected_option_id).length;
+            const isAnswered = !!selectedOptionId;
+            if (isAnswered) answeredCount++;
+
+            const isCorrect = isAnswered && correctOptionId && selectedOptionId === correctOptionId;
+            if (isCorrect) correctCount++;
+
+            const optionsFormatted = (question.options || []).map(opt => {
+                const optId = opt._id ? opt._id.toString() : opt.text;
+                return {
+                    id: optId,
+                    text: opt.text,
+                    isCorrectOption: correctOptionId ? optId === correctOptionId : false,
+                    isSelectedOption: selectedOptionId ? optId === selectedOptionId : false
+                };
+            });
+
+            return {
+                number: idx + 1,
+                questionId: question._id,
+                questionText: question.question_text || question.text || `Question ${idx + 1}`,
+                marks: question.marks || 1,
+                isAnswered,
+                isCorrect,
+                selectedOptionId,
+                correctOptionId,
+                options: optionsFormatted
+            };
+        });
+
+        const totalQuestions = questions.length;
+        const totalMarks = questions.reduce((sum, q) => sum + (q.marks || 1), 0) || totalQuestions;
+        const wrongCount = Math.max(0, answeredCount - correctCount);
         const percentage = totalMarks > 0 ? Math.round((attempt.score / totalMarks) * 100) : 0;
 
         res.status(200).json({
@@ -217,13 +307,14 @@ const getResults = async (req, res) => {
             status: attempt.status,
             score: attempt.score,
             totalMarks,
-            totalQuestions: questions.length,
+            totalQuestions,
             answeredCount,
             correctCount,
             wrongCount,
             percentage,
             startedAt: attempt.started_at,
-            submittedAt: attempt.submitted_at
+            submittedAt: attempt.submitted_at,
+            breakdown
         });
     } catch (err) {
         console.error('Error calculating results:', err);

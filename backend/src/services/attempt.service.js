@@ -36,8 +36,24 @@ const submitAttempt = async (attemptId, submissionType = "Submitted") => {
         const sectionIds = sections.map(s => s._id);
         const secQuestions = await SectionQuestion.find({ sectionId: { $in: sectionIds } });
         if (secQuestions.length > 0) {
-            questions = secQuestions;
+            const questionIds = secQuestions.map(sq => sq.questionId).filter(Boolean);
+            questions = await Question.find({ _id: { $in: questionIds } });
         }
+    }
+
+    if (questions.length === 0) {
+        const mongoose = require("mongoose");
+        if (targetTestId && mongoose.Types.ObjectId.isValid(targetTestId)) {
+            const objId = new mongoose.Types.ObjectId(targetTestId);
+            questions = await Question.find({
+                $or: [{ testId: objId }, { exam_id: objId }]
+            });
+        }
+    }
+
+    if (questions.length === 0 && answers.length > 0) {
+        const answeredQIds = answers.map(a => a.question_id).filter(Boolean);
+        questions = await Question.find({ _id: { $in: answeredQIds } });
     }
 
     // 5. Get student's answers
