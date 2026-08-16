@@ -251,10 +251,15 @@ const getStudentProgress = async (req, res) => {
     let passedCount = 0;
 
     const Test = require("../model/testModel/test.model");
+    const completedExamIds = new Set();
     const recentAttempts = [];
 
     for (const att of attempts) {
       const targetTestId = att.testId || att.exam_id;
+      if (targetTestId) {
+        completedExamIds.add(targetTestId.toString());
+      }
+
       let testObj = null;
       if (targetTestId) {
         testObj = await Test.findById(targetTestId);
@@ -285,6 +290,8 @@ const getStudentProgress = async (req, res) => {
       });
     }
 
+    const examsCompletedCount = completedExamIds.size || 1;
+
     const avgScore = `${Math.round(totalPct / totalAttempts)}%`;
     const bestScore = `${bestPct}%`;
 
@@ -294,19 +301,23 @@ const getStudentProgress = async (req, res) => {
       if (studentObj?.rollno) {
         const TestAssignment = require("../model/testModel/testAssignment.model");
         const assignments = await TestAssignment.find({ rollNumber: studentObj.rollno });
-        totalConducted = assignments.length;
+        const assignedTestIds = new Set(assignments.map(a => a.testId?.toString()).filter(Boolean));
+        totalConducted = assignedTestIds.size;
       }
-      const totalPublished = await Test.countDocuments({ status: "Published" });
-      totalConducted = Math.max(totalConducted, totalPublished, totalAttempts);
+      if (totalConducted === 0) {
+        const totalPublished = await Test.countDocuments({ status: "Published" });
+        totalConducted = totalPublished;
+      }
+      totalConducted = Math.max(totalConducted, examsCompletedCount, 1);
     } catch (e) {
-      totalConducted = totalAttempts;
+      totalConducted = examsCompletedCount;
     }
 
     res.status(200).json({
       totalAttempts,
       passedCount,
-      examsCompleted: totalAttempts,
-      totalConducted: totalConducted || totalAttempts,
+      examsCompleted: examsCompletedCount,
+      totalConducted,
       avgScore,
       bestScore,
       recentAttempts,
