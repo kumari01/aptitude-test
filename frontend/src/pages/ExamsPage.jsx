@@ -15,7 +15,7 @@ export function ExamsPage() {
         setLoading(true);
         const res = await api.get("/test-management/student/assigned");
         if (res.data?.tests) {
-          const formatted = res.data.tests.map(({ test, setting, schedule }) => ({
+          const formatted = res.data.tests.map(({ test, setting, schedule, attempt }) => ({
             id: test._id,
             title: test.title,
             category: test.testType || "Aptitude",
@@ -26,6 +26,8 @@ export function ExamsPage() {
             tabSwitchLimit: setting?.tabSwitchLimit ?? 3,
             startAt: schedule?.startAt,
             endAt: schedule?.endAt,
+            attemptStatus: attempt?.status,
+            attemptId: attempt?._id,
           }));
           setExams(formatted);
         }
@@ -101,13 +103,31 @@ export function ExamsPage() {
                   )}
                 </div>
               </div>
-              <button
-                onClick={() => handleStartExam(e.id)}
-                className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"
-                style={{ background: INK }}
-              >
-                {e.live ? "Take Exam" : "Start Practice"} <ArrowRight size={15} />
-              </button>
+
+              {e.attemptStatus === "Submitted" || e.attemptStatus === "Auto Submitted" || e.attemptStatus === "Completed" ? (
+                <button
+                  onClick={() => navigate(`/exams/${e.id}/result`, { state: { attemptId: e.attemptId, disqualified: e.attemptStatus === "Auto Submitted" } })}
+                  className="w-full flex items-center justify-center gap-2 bg-slate-800 text-white font-semibold py-3 rounded-xl hover:bg-slate-900 transition-opacity"
+                >
+                  View Result <ArrowRight size={15} />
+                </button>
+              ) : e.attemptStatus === "Started" ? (
+                <button
+                  onClick={() => handleStartExam(e.id)}
+                  className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"
+                  style={{ background: BRAND }}
+                >
+                  Resume Exam <ArrowRight size={15} />
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleStartExam(e.id)}
+                  className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"
+                  style={{ background: INK }}
+                >
+                  {e.live ? "Take Exam" : "Start Practice"} <ArrowRight size={15} />
+                </button>
+              )}
             </div>
           ))}
         </div>

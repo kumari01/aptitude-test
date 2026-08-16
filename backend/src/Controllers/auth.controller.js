@@ -227,18 +227,18 @@ const getStudentProgress = async (req, res) => {
   try {
     const studentId = req.user.id;
 
-    // Fetch all submitted attempts for this student, populated with exam details
+    // Fetch all completed/submitted/auto-submitted attempts for this student
     const attempts = await ExamAttempt.find({
       student_id: studentId,
-      status: "Submitted",
-    })
-      .populate("exam_id", "title category totalMarks")
-      .sort({ submitted_at: -1 }).limit(7);
+      status: { $in: ["Submitted", "Auto Submitted", "Completed"] },
+    }).sort({ submitted_at: -1, createdAt: -1 });
 
-    const examsCompleted = attempts.length;
+    const totalAttempts = attempts.length;
 
-    if (examsCompleted === 0) {
+    if (totalAttempts === 0) {
       return res.status(200).json({
+        totalAttempts: 0,
+        passedCount: 0,
         examsCompleted: 0,
         avgScore: "0%",
         bestScore: "0%",
@@ -248,29 +248,50 @@ const getStudentProgress = async (req, res) => {
 
     let totalPct = 0;
     let bestPct = 0;
+    let passedCount = 0;
 
-    const recentAttempts = attempts.map((att) => {
-      const totalMarks = att.exam_id?.totalMarks || 30;
-      const pctValue = Math.round((att.score / totalMarks) * 100);
+    const Test = require("../model/testModel/test.model");
+    const recentAttempts = [];
+
+    for (const att of attempts) {
+      const targetTestId = att.testId || att.exam_id;
+      let testObj = null;
+      if (targetTestId) {
+        testObj = await Test.findById(targetTestId);
+      }
+
+      const totalMarks = testObj?.totalMarks || 10;
+      const pctValue = totalMarks > 0 ? Math.round((att.score / totalMarks) * 100) : 0;
       
       totalPct += pctValue;
       if (pctValue > bestPct) bestPct = pctValue;
 
-      return {
-        id: att._id,
-        title: att.exam_id?.title || "Exam Attempt",
-        score: `${pctValue}%`,
-        marks: `${att.score}/${totalMarks} marks`,
-        status: pctValue >= 50 ? "Passed" : "Failed",
-        date: att.submitted_at ? new Date(att.submitted_at).toLocaleDateString() : "N/A",
-      };
-    });
+      const isDisqualified = att.status === "Auto Submitted";
+      const isPassed = !isDisqualified && pctValue >= 40;
+      if (isPassed) passedCount++;
 
-    const avgScore = `${Math.round(totalPct / examsCompleted)}%`;
+      const statusText = isDisqualified ? "Disqualified" : (isPassed ? "Passed" : "Failed");
+
+      recentAttempts.push({
+        id: att._id,
+        examId: targetTestId,
+        title: testObj?.title || "Assessment Attempt",
+        category: testObj?.testType || "Aptitude",
+        score: `${pctValue}%`,
+        fraction: `${att.score}/${totalMarks}`,
+        status: statusText,
+        disqualified: isDisqualified,
+        date: att.submitted_at ? new Date(att.submitted_at).toLocaleDateString() : (att.started_at ? new Date(att.started_at).toLocaleDateString() : "N/A"),
+      });
+    }
+
+    const avgScore = `${Math.round(totalPct / totalAttempts)}%`;
     const bestScore = `${bestPct}%`;
 
     res.status(200).json({
-      examsCompleted,
+      totalAttempts,
+      passedCount,
+      examsCompleted: totalAttempts,
       avgScore,
       bestScore,
       recentAttempts,

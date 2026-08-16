@@ -5,6 +5,8 @@ const TestSchedule = require("../model/testModel/testSchedule.model");
 const TestAssignment = require("../model/testModel/testAssignment.model");
 const Section = require("../model/sectionModel/section.model");
 const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
+const Question = require("../model/question.model");
+const ExamAttempt = require("../model/testModel/testAttempt.model");
 const { Student } = require("../model/user.model");
 
 // Create a new test with settings & target group
@@ -261,26 +263,49 @@ const getTestDetails = async (req, res) => {
             return res.status(404).json({ message: "Test not found" });
         }
 
+        // Only return the minimal fields required by the exam details page.
         const setting = await TestSetting.findOne({ testId });
-        const target = await TestTarget.findOne({ testId });
-        const schedules = await TestSchedule.find({ testId });
         const sections = await Section.find({ testId }).sort({ displayOrder: 1 });
 
         const sectionDetails = [];
         for (const sec of sections) {
-            const sqList = await SectionQuestion.find({ sectionId: sec._id }).populate("questionId");
+            // Get only the number of questions linked to this section.
+            const sqList = await SectionQuestion.find({ sectionId: sec._id });
             sectionDetails.push({
-                section: sec,
-                questions: sqList
+                section: {
+                    _id: sec._id,
+                    name: sec.name,
+                    totalMarks: sec.totalMarks || 0,
+                },
+                questionCount: sqList.length
             });
         }
 
+        // DEBUG: log section IDs and their question counts
+        try {
+            console.debug(`getTestDetails: testId=${testId} sections=${sections.length}`);
+            sectionDetails.forEach((s) => console.debug(` section ${s.section._id} (${s.section.name}) => ${s.questionCount} questions`));
+        } catch (e) {
+            console.debug('getTestDetails debug log error', e.message);
+        }
+        // Compute total questions across all sections
+        const totalQuestions = sectionDetails.reduce((sum, s) => sum + (s.questionCount || 0), 0);
+
+        // Build a minimal test object
+        const minimalTest = {
+            _id: test._id,
+            title: test.title,
+            testType: test.testType,
+            durationMinutes: test.durationMinutes,
+            totalMarks: test.totalMarks || 0,
+            totalQuestions
+        };
+
         res.status(200).json({
-            test,
+            test: minimalTest,
             setting,
-            target,
-            schedules,
-            sections: sectionDetails
+            sections: sectionDetails,
+            totalQuestions
         });
     } catch (err) {
         console.error("Error retrieving test details:", err.message);
@@ -306,10 +331,22 @@ const listStudentAssignedTests = async (req, res) => {
         for (const t of tests) {
             const setting = await TestSetting.findOne({ testId: t._id });
             const schedule = await TestSchedule.findOne({ testId: t._id }).sort({ createdAt: -1 });
+            const attempt = await ExamAttempt.findOne({
+                $or: [{ testId: t._id }, { exam_id: t._id }],
+                student_id: student._id
+            });
+
             detailedTests.push({
                 test: t,
                 setting,
-                schedule
+                schedule,
+                attempt: attempt ? {
+                    _id: attempt._id,
+                    status: attempt.status,
+                    score: attempt.score,
+                    started_at: attempt.started_at,
+                    completed_at: attempt.completed_at
+                } : null
             });
         }
 

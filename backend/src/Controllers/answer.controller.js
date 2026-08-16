@@ -179,9 +179,19 @@ const getResults = async (req, res) => {
         }
 
         const targetTestId = attempt.testId || attempt.exam_id;
-        const questions = await questionModel.find({
+        let questions = await questionModel.find({
             $or: [{ testId: targetTestId }, { exam_id: targetTestId }]
         });
+        if (questions.length === 0) {
+            const Section = require("../model/sectionModel/section.model");
+            const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
+            const sections = await Section.find({ testId: targetTestId });
+            const sectionIds = sections.map(s => s._id);
+            const secQuestions = await SectionQuestion.find({ sectionId: { $in: sectionIds } });
+            if (secQuestions.length > 0) {
+                questions = secQuestions;
+            }
+        }
         const answers = await studentAnswerSchema.find({ attempt_id: attemptId });
 
         const totalMarks = questions.length; // 1 point per question

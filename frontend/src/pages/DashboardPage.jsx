@@ -52,6 +52,8 @@ export function DashboardPage() {
             due: first.schedule?.endAt
               ? new Date(first.schedule.endAt).toLocaleDateString()
               : "Scheduled",
+            attemptStatus: first.attempt?.status,
+            attemptId: first.attempt?._id,
           });
         }
       } catch (error) {
@@ -114,14 +116,23 @@ export function DashboardPage() {
             </span>
           </div>
         </div>
-        <button
-          onClick={() => liveExam && handleStartExam(liveExam.id)}
-          disabled={!liveExam}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50"
-          style={{ background: BRAND }}
-        >
-          Take Exam <ArrowRight size={16} />
-        </button>
+        {liveExam?.attemptStatus === "Submitted" || liveExam?.attemptStatus === "Auto Submitted" || liveExam?.attemptStatus === "Completed" ? (
+          <button
+            onClick={() => navigate(`/exams/${liveExam.id}/result`, { state: { attemptId: liveExam.attemptId, disqualified: liveExam.attemptStatus === "Auto Submitted" } })}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 bg-slate-800"
+          >
+            View Result <ArrowRight size={16} />
+          </button>
+        ) : (
+          <button
+            onClick={() => liveExam && handleStartExam(liveExam.id)}
+            disabled={!liveExam}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50"
+            style={{ background: BRAND }}
+          >
+            {liveExam?.attemptStatus === "Started" ? "Resume Exam" : "Take Exam"} <ArrowRight size={16} />
+          </button>
+        )}
       </div>
 
       {/* STATS GRID */}

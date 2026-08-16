@@ -3,12 +3,12 @@ const Test = require("../model/testModel/test.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
 const questionModel = require("../model/question.model");
 const {
-  createProctoringSession,
-  findProctoringSessionByAttemptId,
+    createProctoringSession,
+    findProctoringSessionByAttemptId,
 } = require("../services/proctoringSession.service");
 
-const createExam = async(req,res)=>{
-    try{
+const createExam = async (req, res) => {
+    try {
         const { title, testType, duration_minutes, total_marks, totalMarks, maxAttempts } = req.body;
 
         const test = new Test({
@@ -31,23 +31,22 @@ const createExam = async(req,res)=>{
     }
 }
 
-const startExam = async(req,res)=>{
-    try{
+const startExam = async (req, res) => {
+    try {
         const { examId } = req.params;
         // Use authenticated student identity from JWT, not client-supplied studentId
         const studentId = req.user.id;
 
         const test = await Test.findById(examId);
-        if(!test){
+        if (!test) {
             return res.status(404).json({
-                message:'Exam not found'
+                message: 'Exam not found'
             });
         }
 
-        // Check for existing active attempt to resume
+        // Check for existing attempt by this student for this test
         const query = {
             $or: [{ testId: examId }, { exam_id: examId }],
-            status: "Started"
         };
         if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
             query.student_id = studentId;
@@ -60,15 +59,29 @@ const startExam = async(req,res)=>{
                 testId: examId,
                 exam_id: examId,
                 student_id: studentId,
-                started_at: new Date()
+                started_at: new Date(),
+                status: "Started"
             });
+            await attempt.save();
+        } else {
+            // Update existing attempt document instead of creating duplicate documents
+            attempt.started_at = new Date();
+            attempt.completed_at = null;
+            attempt.status = "Started";
+            attempt.score = 0;
+            attempt.totalMarks = 0;
             await attempt.save();
         }
 
-        // Find or create the proctoring session linked to this attempt
+        // Find or reset the proctoring session linked to this attempt
         let proctoringSession = await findProctoringSessionByAttemptId(attempt._id);
         if (!proctoringSession) {
             proctoringSession = await createProctoringSession(attempt._id);
+        } else {
+            proctoringSession.status = "ACTIVE";
+            proctoringSession.tabSwitchCount = 0;
+            proctoringSession.riskScore = 0;
+            await proctoringSession.save();
         }
 
         // Fetch questions without exposing correct_option_id
@@ -86,7 +99,7 @@ const startExam = async(req,res)=>{
             questions
         });
     }
-    catch(err){
+    catch (err) {
         console.error('Error starting exam:', err);
         res.status(500).json({
             message: 'Internal server error'
