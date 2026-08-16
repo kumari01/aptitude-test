@@ -263,49 +263,68 @@ const getTestDetails = async (req, res) => {
             return res.status(404).json({ message: "Test not found" });
         }
 
-        // Only return the minimal fields required by the exam details page.
+        const Question = require("../model/question.model");
+
         const setting = await TestSetting.findOne({ testId });
         const sections = await Section.find({ testId }).sort({ displayOrder: 1 });
 
+        // Query direct questions from Question model
+        const directQuestions = await Question.find({
+            $or: [{ testId: testId }, { exam_id: testId }]
+        });
+
         const sectionDetails = [];
+        let totalSectionQuestions = 0;
+        let totalSectionMarks = 0;
+
         for (const sec of sections) {
-            // Get only the number of questions linked to this section.
             const sqList = await SectionQuestion.find({ sectionId: sec._id });
+            const secMarks = sqList.reduce((sum, sq) => sum + (sq.marks || 1), 0);
             sectionDetails.push({
                 section: {
                     _id: sec._id,
                     name: sec.name,
-                    totalMarks: sec.totalMarks || 0,
+                    totalMarks: sec.totalMarks || secMarks || 0,
                 },
                 questionCount: sqList.length
             });
+            totalSectionQuestions += sqList.length;
+            totalSectionMarks += (sec.totalMarks || secMarks || 0);
         }
 
-        // DEBUG: log section IDs and their question counts
-        try {
-            console.debug(`getTestDetails: testId=${testId} sections=${sections.length}`);
-            sectionDetails.forEach((s) => console.debug(` section ${s.section._id} (${s.section.name}) => ${s.questionCount} questions`));
-        } catch (e) {
-            console.debug('getTestDetails debug log error', e.message);
-        }
-        // Compute total questions across all sections
-        const totalQuestions = sectionDetails.reduce((sum, s) => sum + (s.questionCount || 0), 0);
+        const totalDirectMarks = directQuestions.reduce((sum, q) => sum + (q.marks || 1), 0);
+        const calculatedQuestions = Math.max(directQuestions.length, totalSectionQuestions);
 
-        // Build a minimal test object
-        const minimalTest = {
+        // If no explicit section exists but direct questions exist, synthesize a section entry
+        if (sectionDetails.length === 0 && directQuestions.length > 0) {
+            sectionDetails.push({
+                section: {
+                    _id: `default_${test._id}`,
+                    name: `${test.testType || "General"} Questions`,
+                    totalMarks: totalDirectMarks || directQuestions.length
+                },
+                questionCount: directQuestions.length
+            });
+        }
+
+        const finalTotalMarks = test.totalMarks || totalDirectMarks || totalSectionMarks || calculatedQuestions || 10;
+        const passingMarks = Math.ceil(finalTotalMarks * 0.4);
+
+        const testData = {
             _id: test._id,
             title: test.title,
-            testType: test.testType,
-            durationMinutes: test.durationMinutes,
-            totalMarks: test.totalMarks || 0,
-            totalQuestions
+            testType: test.testType || "Aptitude",
+            durationMinutes: test.durationMinutes || test.duration_minutes || 30,
+            totalMarks: finalTotalMarks,
+            passingMarks: passingMarks,
+            totalQuestions: calculatedQuestions
         };
 
         res.status(200).json({
-            test: minimalTest,
+            test: testData,
             setting,
             sections: sectionDetails,
-            totalQuestions
+            totalQuestions: calculatedQuestions
         });
     } catch (err) {
         console.error("Error retrieving test details:", err.message);

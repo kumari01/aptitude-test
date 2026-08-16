@@ -35,29 +35,23 @@ export function ExamDetailPage() {
         }
 
         if (res.data?.test) {
-          const { test: testData, setting: setObj, sections: secList } = res.data;
+          const { test: testData, setting: setObj, sections: secList, totalQuestions } = res.data;
+          const qCount = typeof totalQuestions === 'number' ? totalQuestions : (testData.totalQuestions || (secList ? secList.reduce((sum, sec) => sum + (sec.questionCount || 0), 0) : 0));
+          const tMarks = testData.totalMarks || (qCount > 0 ? qCount * 1 : 10);
+          const pMarks = testData.passingMarks || Math.ceil(tMarks * 0.4);
+
           setExam({
             id: testData._id,
             title: testData.title,
             category: testData.testType || "Aptitude",
             minutes: testData.durationMinutes || 30,
-            totalMarks: testData.totalMarks || 0,
+            totalMarks: tMarks,
+            passingMarks: pMarks
           });
+
+          setQuestionCount(qCount);
           if (setObj) setSetting(setObj);
-          if (secList) {
-            setSections(secList);
-            // Use server-provided totalQuestions when available, fall back to summing section.questionCount
-            const totalQuestionsFromServer = res.data?.totalQuestions;
-            if (typeof totalQuestionsFromServer === 'number') {
-              setQuestionCount(totalQuestionsFromServer);
-            } else {
-              const totalQuestions = secList.reduce(
-                (sum, sec) => sum + (sec.questionCount || 0),
-                0
-              );
-              if (totalQuestions > 0) setQuestionCount(totalQuestions);
-            }
-          }
+          if (secList) setSections(secList);
         }
         setLoading(false);
       } catch (err) {
@@ -155,12 +149,12 @@ export function ExamDetailPage() {
           </div>
           <div className="bg-gray-50 rounded-xl py-5 text-center">
             <CheckCircle2 size={20} className="mx-auto mb-2 text-gray-500" />
-            <div className="text-lg font-bold text-gray-900">{exam.totalMarks || questionCount}</div>
+            <div className="text-lg font-bold text-gray-900">{exam.totalMarks}</div>
             <div className="text-xs text-gray-500">Total Marks</div>
           </div>
           <div className="bg-gray-50 rounded-xl py-5 text-center">
             <AlertTriangle size={20} className="mx-auto mb-2 text-gray-500" />
-            <div className="text-lg font-bold text-gray-900">{Math.ceil((exam.totalMarks || questionCount) * 0.4)}</div>
+            <div className="text-lg font-bold text-gray-900">{exam.passingMarks || Math.ceil(exam.totalMarks * 0.4)}</div>
             <div className="text-xs text-gray-500">Passing Marks</div>
           </div>
         </div>
