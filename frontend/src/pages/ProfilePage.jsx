@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Trophy, FileText } from "lucide-react";
 import StatCard from "../components/common/StatCard";
-import { USER, STATS } from "../data/mockData";
 import { BRAND, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 
@@ -39,8 +38,8 @@ export function ProfilePage() {
     fetchProfile();
   }, []);
 
-  const displayName = student?.username || student?.name || USER.name;
-  const displayRoll = student?.rollno || student?.roll || USER.roll;
+  const displayName = student?.username || student?.name || "Student";
+  const displayRoll = student?.rollno || student?.roll || "N/A";
   const displayEmail = student?.email || "student@sasi.ac.in";
   const initial = displayName ? displayName[0].toUpperCase() : "S";
 
