@@ -292,7 +292,7 @@ export function AdminDashboardPage() {
           className="flex items-center justify-center gap-2 text-white font-semibold px-5 py-3 rounded-xl hover:opacity-90 transition-opacity shadow-sm shrink-0 cursor-pointer"
           style={{ background: BRAND }}
         >
-          <Plus size={18} /> Launch Test Workflow Wizard
+          <Plus size={18} /> Launch Test Provisioning Pipeline
         </button>
       </div>
 
@@ -350,53 +350,6 @@ export function AdminDashboardPage() {
           iconBg="#FCE7E9"
           iconColor={BRAND}
         />
-      </div>
-
-      {/* Quick Action Toolbar */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm mb-8">
-        <h3 className="text-lg font-bold text-gray-900 mb-4" style={{ fontFamily: FONT_DISPLAY }}>
-          Quick Admin Actions
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-          <button
-            onClick={() => {
-              setWizardInitialTestId("");
-              setIsWizardOpen(true);
-            }}
-            className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-800 transition-colors text-center cursor-pointer"
-          >
-            <Plus size={20} className="mb-2 text-indigo-600" />
-            <span className="text-xs font-bold">New Exam Wizard</span>
-          </button>
-          <button
-            onClick={() => setActiveModal("addQuestion")}
-            className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-800 transition-colors text-center"
-          >
-            <HelpCircle size={20} className="mb-2 text-emerald-600" />
-            <span className="text-xs font-bold">Add Question</span>
-          </button>
-          <button
-            onClick={() => setActiveModal("settings")}
-            className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-800 transition-colors text-center"
-          >
-            <Settings size={20} className="mb-2 text-amber-600" />
-            <span className="text-xs font-bold">Settings & Rules</span>
-          </button>
-          <button
-            onClick={() => setActiveModal("schedule")}
-            className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-800 transition-colors text-center"
-          >
-            <Calendar size={20} className="mb-2 text-blue-600" />
-            <span className="text-xs font-bold">Schedule Exam</span>
-          </button>
-          <button
-            onClick={() => setActiveModal("createSection")}
-            className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-800 transition-colors text-center col-span-2 sm:col-span-1"
-          >
-            <Layers size={20} className="mb-2 text-purple-600" />
-            <span className="text-xs font-bold">Create Section</span>
-          </button>
-        </div>
       </div>
 
       {/* Managed Exams List Table */}
@@ -464,7 +417,7 @@ export function AdminDashboardPage() {
                     }}
                     className="flex-1 md:flex-none text-xs font-bold px-3.5 py-2 rounded-lg bg-red-700 text-white hover:bg-red-800 shadow-xs flex items-center gap-1 cursor-pointer"
                   >
-                    Workflow Wizard
+                    Manage Pipeline
                   </button>
                   <button
                     onClick={() => {

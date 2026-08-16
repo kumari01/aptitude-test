@@ -42,7 +42,7 @@ export default function AdminWorkflowVisualizer({ onStartWorkflow, currentStep =
           style={{ background: BRAND }}
         >
           <Play size={16} className="fill-white" />
-          <span>Launch Workflow Wizard</span>
+          <span>Launch Assessment Pipeline</span>
         </button>
       </div>
 

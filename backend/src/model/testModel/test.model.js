@@ -8,7 +8,7 @@ const testSchema = new mongoose.Schema({
     },
     testType: {
         type: String,
-        enum: ["Practice", "Assessment", "Exam", "Aptitude"],
+        enum: ["Practice", "Assessment", "Exam", "Aptitude", "Technical", "Reasoning", "Verbal", "Coding"],
         default: "Aptitude"
     },
     status: {

@@ -447,7 +447,7 @@ export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished
               </div>
               <div>
                 <h3 className="text-xl font-bold text-white tracking-tight" style={{ fontFamily: FONT_DISPLAY }}>
-                  Test Creation Workflow Wizard
+                  Assessment Setup & Provisioning Pipeline
                 </h3>
                 <p className="text-xs text-slate-400">Step {currentStep} of 5 — {
                   currentStep === 1 ? "Create Test Details" :
@@ -526,13 +526,16 @@ export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished
                   <select
                     value={testForm.testType}
                     onChange={(e) => setTestForm({ ...testForm, testType: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-600 focus:outline-none text-sm"
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-600/30 focus:border-red-600 focus:outline-none text-sm font-semibold bg-white"
                   >
                     <option value="Aptitude">Aptitude</option>
                     <option value="Technical">Technical</option>
-                    <option value="Logical">Logical</option>
+                    <option value="Reasoning">Reasoning</option>
                     <option value="Verbal">Verbal</option>
-                    <option value="Core Engineering">Core Engineering</option>
+                    <option value="Coding">Coding</option>
+                    <option value="Assessment">Assessment</option>
+                    <option value="Exam">Exam</option>
+                    <option value="Practice">Practice</option>
                   </select>
                 </div>
 
@@ -546,7 +549,7 @@ export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished
                     required
                     value={testForm.durationMinutes}
                     onChange={(e) => setTestForm({ ...testForm, durationMinutes: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-600 focus:outline-none text-sm font-medium"
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-600/30 focus:border-red-600 focus:outline-none text-sm font-semibold bg-white"
                   />
                 </div>
 
@@ -560,7 +563,7 @@ export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished
                     required
                     value={testForm.maxAttempts}
                     onChange={(e) => setTestForm({ ...testForm, maxAttempts: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-600 focus:outline-none text-sm font-medium"
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-600/30 focus:border-red-600 focus:outline-none text-sm font-semibold bg-white"
                   />
                 </div>
               </div>
@@ -584,38 +587,129 @@ export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished
             <form onSubmit={handleStep2Submit} className="space-y-6">
               
               {/* Proctoring Settings */}
-              <div>
-                <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2" style={{ fontFamily: FONT_DISPLAY }}>
-                  <Settings size={18} className="text-amber-600" />
-                  Proctoring & Assessment Rules
-                </h4>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2" style={{ fontFamily: FONT_DISPLAY }}>
+                      <Settings size={18} className="text-red-600" />
+                      Proctoring & Security Policy Rules
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Configure automated violation triggers, full-screen locks, and tab-switch allowances.
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-red-600 bg-red-50 border border-red-100 px-2.5 py-1 rounded-full">
+                    Security Policy
+                  </span>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Tab Switch Limit
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={settingsForm.tabSwitchLimit}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, tabSwitchLimit: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white"
-                    />
-                    <p className="text-[11px] text-slate-500 mt-1">Exceeding this limit auto-submits exam</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Tab Switch Limit Control */}
+                  <div className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-2xl flex flex-col justify-between hover:border-slate-300 transition-colors">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                          Max Tab Switches
+                        </label>
+                        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                          {settingsForm.tabSwitchLimit} Max
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mb-3">
+                        Maximum allowed browser tab switch events before auto-submitting.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => setSettingsForm(prev => ({ ...prev, tabSwitchLimit: Math.max(0, Number(prev.tabSwitchLimit) - 1) }))}
+                        className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center transition-colors text-sm cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="0"
+                        value={settingsForm.tabSwitchLimit}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, tabSwitchLimit: Math.max(0, Number(e.target.value)) })}
+                        className="w-full text-center text-sm font-bold text-slate-800 bg-transparent outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSettingsForm(prev => ({ ...prev, tabSwitchLimit: Number(prev.tabSwitchLimit) + 1 }))}
+                        className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center transition-colors text-sm cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-700">Strict Proctoring</span>
-                      <input
-                        type="checkbox"
-                        checked={settingsForm.proctoringEnabled}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, proctoringEnabled: e.target.checked })}
-                        className="w-4 h-4 text-red-600 rounded"
-                      />
+                  {/* Strict Proctoring Toggle Card */}
+                  <div
+                    onClick={() => setSettingsForm(prev => ({ ...prev, proctoringEnabled: !prev.proctoringEnabled }))}
+                    className={`p-4 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all ${
+                      settingsForm.proctoringEnabled
+                        ? "bg-red-50/40 border-red-200/80 ring-2 ring-red-500/10"
+                        : "bg-slate-50/80 border-slate-200/80 hover:border-slate-300"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                          Strict Proctoring
+                        </span>
+                        {/* Custom Modern Toggle Switch */}
+                        <div
+                          className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                            settingsForm.proctoringEnabled ? "bg-red-600 justify-end" : "bg-slate-300 justify-start"
+                          }`}
+                        >
+                          <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Enforces fullscreen mode, blocks window blur & copy-paste actions.
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-1">Enforces full-screen and tab lock</p>
+                    <span className={`text-[10px] font-extrabold uppercase tracking-wider self-start px-2 py-0.5 rounded-full mt-3 ${
+                      settingsForm.proctoringEnabled ? "bg-red-100 text-red-700" : "bg-slate-200 text-slate-600"
+                    }`}>
+                      {settingsForm.proctoringEnabled ? "Active Policy" : "Disabled"}
+                    </span>
+                  </div>
+
+                  {/* Auto-Submit On Violation Toggle Card */}
+                  <div
+                    onClick={() => setSettingsForm(prev => ({ ...prev, autoSubmit: !prev.autoSubmit }))}
+                    className={`p-4 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all ${
+                      settingsForm.autoSubmit
+                        ? "bg-amber-50/40 border-amber-200/80 ring-2 ring-amber-500/10"
+                        : "bg-slate-50/80 border-slate-200/80 hover:border-slate-300"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                          Auto-Submit Exam
+                        </span>
+                        {/* Custom Modern Toggle Switch */}
+                        <div
+                          className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                            settingsForm.autoSubmit ? "bg-amber-600 justify-end" : "bg-slate-300 justify-start"
+                          }`}
+                        >
+                          <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Automatically lock and disqualify attempt when violations limit is breached.
+                      </p>
+                    </div>
+                    <span className={`text-[10px] font-extrabold uppercase tracking-wider self-start px-2 py-0.5 rounded-full mt-3 ${
+                      settingsForm.autoSubmit ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-600"
+                    }`}>
+                      {settingsForm.autoSubmit ? "Auto Lock On" : "Manual Lock"}
+                    </span>
                   </div>
                 </div>
               </div>
