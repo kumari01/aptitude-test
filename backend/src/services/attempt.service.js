@@ -23,12 +23,22 @@ const submitAttempt = async (attemptId, submissionType = "Submitted") => {
     const targetTestId = attempt.testId || attempt.exam_id;
 
     // 4. Get all questions belonging to this test
-    const questions = await Question.find({
+    let questions = await Question.find({
         $or: [
             { testId: targetTestId },
             { exam_id: targetTestId }
         ]
     });
+    if (questions.length === 0) {
+        const Section = require("../model/sectionModel/section.model");
+        const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
+        const sections = await Section.find({ testId: targetTestId });
+        const sectionIds = sections.map(s => s._id);
+        const secQuestions = await SectionQuestion.find({ sectionId: { $in: sectionIds } });
+        if (secQuestions.length > 0) {
+            questions = secQuestions;
+        }
+    }
 
     // 5. Get student's answers
     const answers = await StudentAnswer.find({

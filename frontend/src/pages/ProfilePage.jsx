@@ -7,13 +7,21 @@ import api from "../api/axios";
 
 export function ProfilePage() {
   const [student, setStudent] = useState(null);
+  const [progress, setProgress] = useState(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await api.get("/auth/student/profile");
-        if (response.data?.student) {
-          setStudent(response.data.student);
+        const [profileRes, progressRes] = await Promise.all([
+          api.get("/auth/student/profile"),
+          api.get("/auth/student/progress").catch(() => null),
+        ]);
+
+        if (profileRes?.data?.student) {
+          setStudent(profileRes.data.student);
+        }
+        if (progressRes?.data) {
+          setProgress(progressRes.data);
         }
       } catch (error) {
         console.error("Profile error:", error);
@@ -62,14 +70,14 @@ export function ProfilePage() {
       <div className="grid grid-cols-2 gap-4 mt-6">
         <StatCard
           label="Best Score"
-          value={STATS.best}
+          value={progress ? progress.bestScore : "0%"}
           icon={<Trophy size={17} />}
           iconBg="#FCE7E9"
           iconColor={BRAND}
         />
         <StatCard
           label="Exams Completed"
-          value={STATS.completed}
+          value={progress ? progress.examsCompleted : 0}
           icon={<FileText size={17} />}
           iconBg="#DBEAFE"
           iconColor="#2563EB"

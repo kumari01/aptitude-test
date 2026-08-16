@@ -14,10 +14,11 @@ export function ExamResultPage() {
 
   const state = location.state || {};
   const [resultData, setResultData] = useState({
-    correct: state.correct ?? 6,
-    total: state.total ?? QUESTIONS.length,
-    answeredCount: state.answeredCount ?? 7,
-    percentage: state.percentage ?? Math.round(((state.correct ?? 6) / (state.total ?? QUESTIONS.length)) * 100),
+    correct: state.correct ?? 0,
+    total: state.total ?? 0,
+    answeredCount: state.answeredCount ?? 0,
+    wrongCount: state.wrongCount ?? 0,
+    percentage: state.percentage ?? 0,
   });
 
   useEffect(() => {
@@ -25,11 +26,19 @@ export function ExamResultPage() {
       api.get(`/answers/results/${state.attemptId}`)
         .then((res) => {
           if (res.data) {
+            const answered = res.data.answeredCount ?? state.answeredCount ?? 0;
+            const correct = res.data.correctCount ?? state.correct ?? 0;
+            const wrong = res.data.wrongCount !== undefined 
+              ? res.data.wrongCount 
+              : Math.max(0, answered - correct);
+            const total = res.data.totalQuestions || res.data.totalMarks || state.total || 0;
+
             setResultData({
-              correct: res.data.correctCount ?? state.correct ?? 0,
-              total: res.data.totalMarks ?? state.total ?? QUESTIONS.length,
-              answeredCount: res.data.answeredCount ?? state.answeredCount ?? 0,
-              percentage: res.data.percentage ?? 0,
+              correct,
+              total,
+              answeredCount: answered,
+              wrongCount: wrong,
+              percentage: res.data.percentage ?? (total > 0 ? Math.round((correct / total) * 100) : 0),
             });
           }
         })
@@ -37,14 +46,25 @@ export function ExamResultPage() {
     }
   }, [state.attemptId]);
 
-  const { correct, total, answeredCount, percentage } = resultData;
-  const wrong = Math.max(0, answeredCount - correct);
+  const { correct, total, answeredCount, percentage, wrongCount } = resultData;
+  const wrong = wrongCount !== undefined ? wrongCount : Math.max(0, answeredCount - correct);
   const skipped = Math.max(0, total - answeredCount);
-  const pct = percentage !== undefined ? percentage : Math.round((correct / (total || 1)) * 100);
-  const passed = pct >= 40;
+  const pct = percentage !== undefined ? percentage : (total > 0 ? Math.round((correct / total) * 100) : 0);
+  const isDisqualified = state.disqualified === true;
+  const passed = isDisqualified ? false : (pct >= 40);
 
   return (
     <div className="px-4 sm:px-6 md:px-10 py-10 max-w-2xl mx-auto">
+      {isDisqualified && (
+        <div className="bg-red-600 text-white rounded-2xl p-5 mb-6 shadow-md text-sm font-semibold flex items-center gap-3">
+          <XCircle size={28} className="shrink-0" />
+          <div>
+            <strong className="block text-base font-bold">Attempt Terminated</strong>
+            This attempt was automatically submitted and locked because you exceeded the tab/window switch limits allowed for this exam.
+          </div>
+        </div>
+      )}
+
       <div
         className={`rounded-2xl p-6 text-center mb-6 shadow-sm ${
           passed ? "bg-emerald-50 text-emerald-900 border border-emerald-100" : "bg-red-50 text-red-900 border border-red-100"
@@ -54,12 +74,14 @@ export function ExamResultPage() {
           className="text-2xl font-bold mb-1"
           style={{ fontFamily: FONT_DISPLAY }}
         >
-          {passed ? "Congratulations!" : "Keep Practicing!"}
+          {isDisqualified ? "Disqualified" : (passed ? "Congratulations!" : "Keep Practicing!")}
         </h1>
         <p className="text-sm opacity-90">
-          {passed
-            ? "You have successfully passed the examination."
-            : "You did not reach the passing marks this time."}
+          {isDisqualified 
+            ? "Your attempt was disqualified due to exam violations."
+            : (passed
+              ? "You have successfully passed the examination."
+              : "You did not reach the passing marks this time.")}
         </p>
       </div>
 
@@ -124,6 +146,8 @@ export function ExamResultPage() {
         >
           <ChevronLeft size={16} /> Dashboard
         </button>
+
+        {/* Future Scope: Retake option for accidental termination or retakes
         <button
           onClick={() => navigate(`/exams/${examId}/take`)}
           className="flex items-center gap-2 text-white font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity ml-auto shadow-sm"
@@ -131,6 +155,7 @@ export function ExamResultPage() {
         >
           Retake Exam <RotateCcw size={15} />
         </button>
+        */}
       </div>
     </div>
   );

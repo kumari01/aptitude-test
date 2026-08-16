@@ -20,6 +20,10 @@ const testSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    durationMinutes: {
+        type: Number,
+        default: 30
+    },
     maxAttempts: {
         type: Number,
         default: 1
