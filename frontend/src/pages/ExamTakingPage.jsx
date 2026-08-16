@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Clock, Flag, ChevronLeft, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
-import { EXAMS_LIST, QUESTIONS as MOCK_QUESTIONS } from "../data/mockData";
 import { formatTime } from "../utils/formatters";
 import { BRAND, BRAND_TINT, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
 import { useToast } from "../context/ToastContext";
@@ -13,16 +12,14 @@ export function ExamTakingPage() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const fallbackExam = EXAMS_LIST.find((e) => e.id === Number(examId)) || EXAMS_LIST[0];
-
-  const [exam, setExam] = useState(fallbackExam);
-  const [questions, setQuestions] = useState(MOCK_QUESTIONS);
+  const [exam, setExam] = useState({ title: "Assessment Test", minutes: 30 });
+  const [questions, setQuestions] = useState([]);
   const [attemptId, setAttemptId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [seconds, setSeconds] = useState(fallbackExam.minutes * 60);
+  const [seconds, setSeconds] = useState(1800);
   const timerRef = useRef(null);
 
   // Proctoring States

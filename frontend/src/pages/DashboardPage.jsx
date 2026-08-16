@@ -1,6 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
 import {
   FileText,
   Clock,
@@ -11,7 +10,6 @@ import {
   Trophy,
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
-import { STATS, LEADERBOARD, RECENT_WEEKS } from "../data/mockData";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 import AdminDashboardPage from "./AdminDashboardPage";
@@ -21,6 +19,8 @@ export function DashboardPage() {
   const [student, setStudent] = useState(null);
   const [progress, setProgress] = useState(null);
   const [liveExam, setLiveExam] = useState(null);
+  const [totalAssignedCount, setTotalAssignedCount] = useState(0);
+  const [leaderboard, setLeaderboard] = useState([]);
 
   const isAdmin = !!localStorage.getItem("admin");
 
@@ -41,11 +41,15 @@ export function DashboardPage() {
         if (progressRes?.data) {
           setProgress(progressRes.data);
         }
+        if (assignedRes?.data?.tests) {
+          setTotalAssignedCount(assignedRes.data.tests.length);
+        }
         // Use the first assigned test for the LIVE banner
         if (assignedRes?.data?.tests && assignedRes.data.tests.length > 0) {
           const first = assignedRes.data.tests[0];
+          const targetExamId = first.test._id;
           setLiveExam({
-            id: first.test._id,
+            id: targetExamId,
             title: first.test.title,
             questions: 10,
             minutes: 30,
@@ -55,6 +59,15 @@ export function DashboardPage() {
             attemptStatus: first.attempt?.status,
             attemptId: first.attempt?._id,
           });
+
+          // Fetch leaderboard for this test if available
+          api.get(`/leaderboard/${targetExamId}`)
+            .then((lbRes) => {
+              if (lbRes.data?.leaderboard) {
+                setLeaderboard(lbRes.data.leaderboard);
+              }
+            })
+            .catch(() => null);
         }
       } catch (error) {
         console.error("Dashboard fetch error:", error);
@@ -82,7 +95,7 @@ export function DashboardPage() {
   return (
     <div className="px-4 sm:px-6 md:px-10 py-6 max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
-        Hi, {student ? student.username : "Student"}
+        Hi, {student ? (student.username || student.name) : "Student"}
       </h1>
       <p className="text-gray-500 mt-1 mb-6">Here's your weekly exam status</p>
 
@@ -139,30 +152,34 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
           label="Your Rank"
-          value={STATS.rank}
-          delta={STATS.rankDelta}
+          value={progress?.rank || "—"}
           icon={<Award size={17} />}
           iconBg="#FEF3C7"
           iconColor="#D97706"
         />
         <StatCard
           label="Avg Score"
-          value={progress ? progress.avgScore : STATS.avgScore}
-          delta={STATS.avgDelta}
+          value={progress ? progress.avgScore : "0%"}
           icon={<TrendingUp size={17} />}
           iconBg="#DCFCE7"
           iconColor="#16A34A"
         />
         <StatCard
           label="Exams Completed"
-          value={progress ? `${progress.examsCompleted}/12` : STATS.completed}
+          value={
+            progress
+              ? totalAssignedCount > 0
+                ? `${progress.examsCompleted} / ${Math.max(totalAssignedCount, progress.examsCompleted)}`
+                : `${progress.examsCompleted}`
+              : "0"
+          }
           icon={<FileText size={17} />}
           iconBg="#DBEAFE"
           iconColor="#2563EB"
         />
         <StatCard
           label="Best Score"
-          value={progress ? progress.bestScore : STATS.best}
+          value={progress ? progress.bestScore : "0%"}
           icon={<Trophy size={17} />}
           iconBg="#FCE7E9"
           iconColor={BRAND}
@@ -176,66 +193,74 @@ export function DashboardPage() {
             <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
               Leaderboard
             </h3>
-            <span className="text-sm text-gray-400 cursor-pointer hover:text-gray-600">Last week's results</span>
+            <span className="text-sm text-gray-400">Exam Standings</span>
           </div>
-          <div className="space-y-1">
-            {LEADERBOARD.map((p) => (
-              <div
-                key={p.rank}
-                className={`flex items-center justify-between py-3 px-3 rounded-lg ${
-                  p.isYou ? "bg-gray-50 border border-gray-100" : ""
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                      p.rank === 1 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
-                    {p.rank}
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-gray-900">
-                      {p.name} {p.isYou && <span className="text-xs text-gray-400 font-normal">(You)</span>}
+          {leaderboard.length === 0 ? (
+            <p className="text-sm text-gray-400 py-6 text-center">No leaderboard entries available yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {leaderboard.map((p, idx) => (
+                <div
+                  key={p._id || idx}
+                  className={`flex items-center justify-between py-3 px-3 rounded-lg ${
+                    p.studentId === student?._id ? "bg-gray-50 border border-gray-100" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                        (p.rank || idx + 1) === 1 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {p.rank || idx + 1}
                     </div>
-                    <div className="text-xs text-gray-400">{p.roll}</div>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        {p.studentName || p.username || "Student"} {p.studentId === student?._id && <span className="text-xs text-gray-400 font-normal">(You)</span>}
+                      </div>
+                      <div className="text-xs text-gray-400">{p.rollno || ""}</div>
+                    </div>
                   </div>
+                  <span className="text-sm font-bold text-gray-900">{p.score}%</span>
                 </div>
-                <span className="text-sm font-bold text-gray-900">{p.score}%</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
           <h3 className="text-lg font-bold text-gray-900 mb-4" style={{ fontFamily: FONT_DISPLAY }}>
-            Recent Weeks
+            Recent Attempts
           </h3>
           <div className="space-y-4">
-            {(progress?.recentAttempts?.length ? progress.recentAttempts : RECENT_WEEKS).map((w, idx) => (
-              <div key={w.id || w.week || idx} className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-gray-900">{w.title || w.week}</div>
-                  <div className="text-xs text-gray-400">{w.marks}</div>
-                </div>
-                <div className="text-right">
-                  <div
-                    className={`text-sm font-bold ${
-                      w.status === "Passed" ? "text-emerald-600" : "text-red-500"
-                    }`}
-                  >
-                    {w.score || w.pct}
+            {(!progress?.recentAttempts || progress.recentAttempts.length === 0) ? (
+              <p className="text-sm text-gray-400 py-4">No recent attempts recorded yet.</p>
+            ) : (
+              progress.recentAttempts.slice(0, 5).map((w, idx) => (
+                <div key={w.id || idx} className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">{w.title}</div>
+                    <div className="text-xs text-gray-400">{w.date}</div>
                   </div>
-                  <div
-                    className={`text-xs ${
-                      w.status === "Passed" ? "text-emerald-600" : "text-red-500"
-                    }`}
-                  >
-                    {w.status}
+                  <div className="text-right">
+                    <div
+                      className={`text-sm font-bold ${
+                        w.status === "Passed" ? "text-emerald-600" : "text-red-500"
+                      }`}
+                    >
+                      {w.score}
+                    </div>
+                    <div
+                      className={`text-xs ${
+                        w.status === "Passed" ? "text-emerald-600" : "text-red-500"
+                      }`}
+                    >
+                      {w.status}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
             <button
               onClick={() => navigate("/results")}
               className="text-sm font-semibold pt-2 flex items-center gap-1 hover:underline"

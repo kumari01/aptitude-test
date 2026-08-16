@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, RotateCcw } from "lucide-react";
-import { EXAMS_LIST, QUESTIONS } from "../data/mockData";
 import { INK, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 
@@ -9,8 +8,6 @@ export function ExamResultPage() {
   const { examId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-
-  const exam = EXAMS_LIST.find((e) => e.id === Number(examId)) || EXAMS_LIST[0];
 
   const state = location.state || {};
   const [resultData, setResultData] = useState({

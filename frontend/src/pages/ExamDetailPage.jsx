@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronLeft, FileText, Clock, CheckCircle2, AlertTriangle, ArrowRight, ShieldAlert, X, Maximize2 } from "lucide-react";
-// import { EXAMS_LIST, QUESTIONS as MOCK_QUESTIONS } from "../data/mockData";
 import { BRAND, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
