@@ -143,7 +143,10 @@ const getLiveSessionsForTest = async (req, res) => {
     }).sort({ updatedAt: -1 });
 
     const liveData = [];
+    const processedAttemptIds = new Set();
+
     for (const session of sessions) {
+      processedAttemptIds.add(session.attemptId.toString());
       const attempt = attempts.find((a) => a._id.toString() === session.attemptId.toString());
       let student = null;
       if (attempt?.student_id) {
@@ -160,13 +163,35 @@ const getLiveSessionsForTest = async (req, res) => {
         attemptId: session.attemptId,
         studentName: student?.username || student?.name || "Student",
         rollNumber: attempt?.rollNumber || student?.rollno || "N/A",
-        tabSwitchCount: session.tabSwitchCount || 0,
-        riskScore: session.riskScore || 0,
-        status: session.status, // ACTIVE, COMPLETED, TERMINATED, FLAGGED
+        tabSwitchCount: session.tabSwitchCount || attempt?.tab_switches || 0,
+        riskScore: session.riskScore || (attempt?.tab_switches ? Math.min(100, attempt.tab_switches * 25) : 0),
+        status: session.status || (attempt?.status === "Started" ? "ACTIVE" : "COMPLETED"),
         attemptStatus: attempt?.status,
         events,
-        updatedAt: session.updatedAt,
+        updatedAt: session.updatedAt || attempt?.updatedAt,
       });
+    }
+
+    // Include any active attempts that don't have a session document yet
+    for (const attempt of attempts) {
+      if (!processedAttemptIds.has(attempt._id.toString()) && (attempt.status === "Started" || attempt.status === "InProgress")) {
+        let student = null;
+        if (attempt.student_id) {
+          student = await Student.findById(attempt.student_id);
+        }
+        liveData.push({
+          sessionId: `att_${attempt._id}`,
+          attemptId: attempt._id,
+          studentName: student?.username || student?.name || "Student",
+          rollNumber: attempt.rollNumber || student?.rollno || "N/A",
+          tabSwitchCount: attempt.tab_switches || 0,
+          riskScore: attempt.tab_switches ? Math.min(100, attempt.tab_switches * 25) : 0,
+          status: "ACTIVE",
+          attemptStatus: attempt.status,
+          events: [],
+          updatedAt: attempt.updatedAt || new Date()
+        });
+      }
     }
 
     return res.status(200).json({
