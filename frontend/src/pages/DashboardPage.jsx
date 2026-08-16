@@ -168,10 +168,8 @@ export function DashboardPage() {
           label="Exams Completed"
           value={
             progress
-              ? totalAssignedCount > 0
-                ? `${progress.examsCompleted} / ${Math.max(totalAssignedCount, progress.examsCompleted)}`
-                : `${progress.examsCompleted}`
-              : "0"
+              ? `${progress.examsCompleted} / ${progress.totalConducted || Math.max(totalAssignedCount, progress.examsCompleted)}`
+              : "0 / 0"
           }
           icon={<FileText size={17} />}
           iconBg="#DBEAFE"
