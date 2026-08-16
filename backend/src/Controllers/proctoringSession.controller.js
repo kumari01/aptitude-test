@@ -122,8 +122,106 @@ const endSession = async (req, res) => {
     });
   }
 };
+
+// Admin: Get live proctoring sessions for a test
+const getLiveSessionsForTest = async (req, res) => {
+  try {
+    const { testId } = req.params;
+    const ProctoringEvent = require("../model/proctoring/proctoringEvent");
+    const { Student } = require("../model/user.model");
+
+    // 1. Find all attempts for this test
+    const attempts = await ExamAttempt.find({
+      $or: [{ testId }, { exam_id: testId }],
+    }).sort({ createdAt: -1 });
+
+    const attemptIds = attempts.map((a) => a._id);
+
+    // 2. Find sessions linked to these attempts
+    const sessions = await ProctoringSession.find({
+      attemptId: { $in: attemptIds },
+    }).sort({ updatedAt: -1 });
+
+    const liveData = [];
+    for (const session of sessions) {
+      const attempt = attempts.find((a) => a._id.toString() === session.attemptId.toString());
+      let student = null;
+      if (attempt?.student_id) {
+        student = await Student.findById(attempt.student_id);
+      }
+
+      // Fetch recent 5 events for this session
+      const events = await ProctoringEvent.find({ sessionId: session._id })
+        .sort({ timestamp: -1 })
+        .limit(5);
+
+      liveData.push({
+        sessionId: session._id,
+        attemptId: session.attemptId,
+        studentName: student?.username || student?.name || "Student",
+        rollNumber: attempt?.rollNumber || student?.rollno || "N/A",
+        tabSwitchCount: session.tabSwitchCount || 0,
+        riskScore: session.riskScore || 0,
+        status: session.status, // ACTIVE, COMPLETED, TERMINATED, FLAGGED
+        attemptStatus: attempt?.status,
+        events,
+        updatedAt: session.updatedAt,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: liveData.length,
+      sessions: liveData,
+    });
+  } catch (error) {
+    console.error("Error fetching live proctoring sessions:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Admin: Manually force terminate a student's session & disqualify attempt
+const terminateSessionByAdmin = async (req, res) => {
+  try {
+    const { sessionId, reason } = req.body;
+    const { submitAttempt } = require("../services/attempt.service");
+
+    const session = await ProctoringSession.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, message: "Session not found" });
+    }
+
+    session.status = "TERMINATED";
+    session.endedAt = new Date();
+    await session.save();
+
+    if (session.attemptId) {
+      try {
+        await submitAttempt(session.attemptId, "Auto Submitted");
+      } catch (err) {
+        // If already submitted/completed, update status directly
+        await ExamAttempt.findByIdAndUpdate(session.attemptId, { status: "Auto Submitted" });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Proctoring session terminated and attempt disqualified",
+      session,
+    });
+  } catch (error) {
+    console.error("Error terminating session:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createSession,
   getSession,
   endSession,
+  getLiveSessionsForTest,
+  terminateSessionByAdmin,
 };

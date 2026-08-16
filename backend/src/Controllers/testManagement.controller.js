@@ -357,6 +357,32 @@ const listStudentAssignedTests = async (req, res) => {
     }
 };
 
+// Admin Overview Dashboard Metrics
+const getAdminOverview = async (req, res) => {
+    try {
+        const totalExams = await Test.countDocuments();
+        const publishedExams = await Test.countDocuments({ status: "Published" });
+        const draftExams = await Test.countDocuments({ status: "Draft" });
+        const totalSchedules = await TestSchedule.countDocuments();
+        const totalAttempts = await ExamAttempt.countDocuments({ status: { $in: ["Submitted", "Completed", "Auto Submitted"] } });
+        const disqualifiedAttempts = await ExamAttempt.countDocuments({ status: "Auto Submitted" });
+        const totalStudents = await Student.countDocuments();
+
+        res.status(200).json({
+            totalExams,
+            publishedExams,
+            draftExams,
+            totalSchedules,
+            totalAttempts,
+            disqualifiedAttempts,
+            totalStudents
+        });
+    } catch (err) {
+        console.error("Error fetching admin overview metrics:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 module.exports = {
     createTest,
     updateTestTarget,
@@ -366,5 +392,6 @@ module.exports = {
     createSection,
     addQuestionToSection,
     getTestDetails,
-    listStudentAssignedTests
+    listStudentAssignedTests,
+    getAdminOverview
 };

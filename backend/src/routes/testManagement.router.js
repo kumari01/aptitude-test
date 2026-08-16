@@ -28,6 +28,9 @@ router.get("/student/assigned", authenticate, controller.listStudentAssignedTest
 // Admin: list all tests for admin dashboard
 router.get("/admin/all", authenticate, requireAdmin, controller.listAllTests);
 
+// Admin: summary overview metrics
+router.get("/admin/overview", authenticate, requireAdmin, controller.getAdminOverview);
+
 router.get("/:testId", authenticate, controller.getTestDetails);
 
 module.exports = router;

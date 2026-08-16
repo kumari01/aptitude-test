@@ -21,15 +21,32 @@ import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import AdminWorkflowVisualizer from "../components/admin/AdminWorkflowVisualizer";
 import CreateTestWizardModal from "../components/admin/CreateTestWizardModal";
+import LiveProctoringMonitorModal from "../components/admin/LiveProctoringMonitorModal";
 
 export function AdminDashboardPage() {
   const toast = useToast();
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Overview metrics
+  const [overviewStats, setOverviewStats] = useState({
+    totalExams: 0,
+    publishedExams: 0,
+    draftExams: 0,
+    totalSchedules: 0,
+    totalAttempts: 0,
+    disqualifiedAttempts: 0,
+    totalStudents: 0,
+  });
+
   // Wizard modal state
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardInitialTestId, setWizardInitialTestId] = useState("");
+
+  // Live Proctoring Monitor modal state
+  const [liveMonitorOpen, setLiveMonitorOpen] = useState(false);
+  const [monitorTestId, setMonitorTestId] = useState("");
+  const [monitorTestTitle, setMonitorTestTitle] = useState("");
 
   // Modals state
   const [activeModal, setActiveModal] = useState(null); // 'createTest' | 'addQuestion' | 'settings' | 'target' | 'schedule' | 'createSection' | 'addSectionQuestion'
@@ -93,10 +110,13 @@ export function AdminDashboardPage() {
   const fetchAdminData = async () => {
     setLoading(true);
     try {
-      // Fetch all tests (admin view)
-      const res = await api.get("/test-management/admin/all").catch(() => null);
-      if (res?.data?.tests) {
-        const formatted = res.data.tests.map(({ test, setting, schedule }) => ({
+      const [allRes, overviewRes] = await Promise.all([
+        api.get("/test-management/admin/all").catch(() => null),
+        api.get("/test-management/admin/overview").catch(() => null),
+      ]);
+
+      if (allRes?.data?.tests) {
+        const formatted = allRes.data.tests.map(({ test, setting, schedule }) => ({
           id: test._id,
           title: test.title,
           category: test.testType || "Aptitude",
@@ -108,6 +128,10 @@ export function AdminDashboardPage() {
           schedule
         }));
         setTests(formatted);
+      }
+
+      if (overviewRes?.data) {
+        setOverviewStats(overviewRes.data);
       }
     } catch (err) {
       console.error("Admin fetch error:", err);
@@ -288,32 +312,40 @@ export function AdminDashboardPage() {
         initialTestId={wizardInitialTestId}
       />
 
+      {/* Live Proctoring Monitor Modal */}
+      <LiveProctoringMonitorModal
+        isOpen={liveMonitorOpen}
+        onClose={() => setLiveMonitorOpen(false)}
+        testId={monitorTestId}
+        testTitle={monitorTestTitle}
+      />
+
       {/* Admin Stats Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <StatCard
           label="Total Managed Exams"
-          value={tests.length}
+          value={overviewStats.totalExams || tests.length}
           icon={<FileText size={18} />}
           iconBg="#DBEAFE"
           iconColor="#2563EB"
         />
         <StatCard
           label="Published & Live"
-          value={tests.filter(t => t.status === "Published").length}
+          value={overviewStats.publishedExams || tests.filter(t => t.status === "Published").length}
           icon={<CheckCircle2 size={18} />}
           iconBg="#D1FAE5"
           iconColor="#059669"
         />
         <StatCard
-          label="Draft Status"
-          value={tests.filter(t => t.status === "Draft").length}
+          label="Total Student Attempts"
+          value={overviewStats.totalAttempts || 0}
           icon={<Clock size={18} />}
           iconBg="#FEF3C7"
           iconColor="#D97706"
         />
         <StatCard
-          label="Proctored Tests"
-          value={tests.filter(t => t.setting?.proctoringEnabled !== false).length}
+          label="Disqualified Attempts"
+          value={overviewStats.disqualifiedAttempts || 0}
           icon={<ShieldAlert size={18} />}
           iconBg="#FCE7E9"
           iconColor={BRAND}
@@ -413,6 +445,18 @@ export function AdminDashboardPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 w-full md:w-auto shrink-0">
+                  {t.status === "Published" && (
+                    <button
+                      onClick={() => {
+                        setMonitorTestId(t.id);
+                        setMonitorTestTitle(t.title);
+                        setLiveMonitorOpen(true);
+                      }}
+                      className="flex-1 md:flex-none text-xs font-bold px-3.5 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 shadow-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <ShieldAlert size={13} /> Live Proctoring
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setWizardInitialTestId(t.id);
