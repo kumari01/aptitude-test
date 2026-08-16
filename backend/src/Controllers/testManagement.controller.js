@@ -295,18 +295,6 @@ const getTestDetails = async (req, res) => {
         const totalDirectMarks = directQuestions.reduce((sum, q) => sum + (q.marks || 1), 0);
         const calculatedQuestions = Math.max(directQuestions.length, totalSectionQuestions);
 
-        // If no explicit section exists but direct questions exist, synthesize a section entry
-        if (sectionDetails.length === 0 && directQuestions.length > 0) {
-            sectionDetails.push({
-                section: {
-                    _id: `default_${test._id}`,
-                    name: `${test.testType || "General"} Questions`,
-                    totalMarks: totalDirectMarks || directQuestions.length
-                },
-                questionCount: directQuestions.length
-            });
-        }
-
         const finalTotalMarks = test.totalMarks || totalDirectMarks || totalSectionMarks || calculatedQuestions || 10;
         const passingMarks = Math.ceil(finalTotalMarks * 0.4);
 
