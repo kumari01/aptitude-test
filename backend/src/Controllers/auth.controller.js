@@ -288,10 +288,25 @@ const getStudentProgress = async (req, res) => {
     const avgScore = `${Math.round(totalPct / totalAttempts)}%`;
     const bestScore = `${bestPct}%`;
 
+    let totalConducted = 0;
+    try {
+      const studentObj = await Student.findById(studentId);
+      if (studentObj?.rollno) {
+        const TestAssignment = require("../model/testModel/testAssignment.model");
+        const assignments = await TestAssignment.find({ rollNumber: studentObj.rollno });
+        totalConducted = assignments.length;
+      }
+      const totalPublished = await Test.countDocuments({ status: "Published" });
+      totalConducted = Math.max(totalConducted, totalPublished, totalAttempts);
+    } catch (e) {
+      totalConducted = totalAttempts;
+    }
+
     res.status(200).json({
       totalAttempts,
       passedCount,
       examsCompleted: totalAttempts,
+      totalConducted: totalConducted || totalAttempts,
       avgScore,
       bestScore,
       recentAttempts,
