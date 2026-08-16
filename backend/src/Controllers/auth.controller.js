@@ -290,27 +290,18 @@ const getStudentProgress = async (req, res) => {
       });
     }
 
-    const examsCompletedCount = completedExamIds.size || 1;
+    const examsCompletedCount = completedExamIds.size;
 
-    const avgScore = `${Math.round(totalPct / totalAttempts)}%`;
+    const avgScore = totalAttempts > 0 ? `${Math.round(totalPct / totalAttempts)}%` : "0%";
     const bestScore = `${bestPct}%`;
 
     let totalConducted = 0;
     try {
-      const studentObj = await Student.findById(studentId);
-      if (studentObj?.rollno) {
-        const TestAssignment = require("../model/testModel/testAssignment.model");
-        const assignments = await TestAssignment.find({ rollNumber: studentObj.rollno });
-        const assignedTestIds = new Set(assignments.map(a => a.testId?.toString()).filter(Boolean));
-        totalConducted = assignedTestIds.size;
-      }
-      if (totalConducted === 0) {
-        const totalPublished = await Test.countDocuments({ status: "Published" });
-        totalConducted = totalPublished;
-      }
-      totalConducted = Math.max(totalConducted, examsCompletedCount, 1);
+      // Total number of exams created by Admin
+      const totalAdminCreated = await Test.countDocuments({ status: { $ne: "Archived" } });
+      totalConducted = Math.max(totalAdminCreated, examsCompletedCount);
     } catch (e) {
-      totalConducted = examsCompletedCount;
+      totalConducted = Math.max(1, examsCompletedCount);
     }
 
     res.status(200).json({

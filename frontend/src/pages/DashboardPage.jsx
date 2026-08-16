@@ -214,9 +214,14 @@ export function DashboardPage() {
                     </div>
                     <div>
                       <div className="text-sm font-semibold text-gray-900">
-                        {p.studentName || p.username || "Student"} {p.studentId === student?._id && <span className="text-xs text-gray-400 font-normal">(You)</span>}
+                        {p.studentName || p.username || p.student_id?.username || p.student_id?.name || "Student"}{" "}
+                        {(p.studentId === student?._id || p.student_id?._id === student?._id) && (
+                          <span className="text-xs text-gray-400 font-normal">(You)</span>
+                        )}
                       </div>
-                      <div className="text-xs text-gray-400">{p.rollno || ""}</div>
+                      <div className="text-xs text-gray-400 font-mono">
+                        {p.rollno || p.student_id?.rollno || ""}
+                      </div>
                     </div>
                   </div>
                   <span className="text-sm font-bold text-gray-900">{p.score}%</span>

@@ -14,10 +14,10 @@ const generateLeaderboard = async (examId) => {
             throw new Error("Exam not found");
         }
 
-        // Get all submitted attempts for this exam
+        // Get all submitted/completed attempts for this exam
         const attempts = await ExamAttempt.find({
-            exam_id: examId,
-            status: "Submitted"
+            $or: [{ exam_id: examId }, { testId: examId }],
+            status: { $in: ["Submitted", "Completed", "Auto Submitted"] }
         }).sort({
             score: -1,
             submitted_at: 1
@@ -94,7 +94,7 @@ const generateLeaderboard = async (examId) => {
 /*
     GET /api/leaderboard/:examId
 
-    Get complete leaderboard
+    Get complete leaderboard with populated student name & roll number
 */
 const getLeaderboard = async (req, res) => {
     try {
@@ -103,11 +103,28 @@ const getLeaderboard = async (req, res) => {
         // Generate/update leaderboard first
         await generateLeaderboard(examId);
 
-        const leaderboard = await Leaderboard.find({
-            exam_id: examId
+        const rawLeaderboard = await Leaderboard.find({
+            $or: [{ exam_id: examId }, { test_id: examId }]
         })
-            .populate("student_id", "username email rollno")
+            .populate("student_id", "username name email rollno department")
             .sort({ rank: 1 });
+
+        const leaderboard = rawLeaderboard.map((entry) => {
+            const student = entry.student_id;
+            return {
+                _id: entry._id,
+                rank: entry.rank,
+                score: entry.percentage || entry.score,
+                rawScore: entry.score,
+                percentage: entry.percentage,
+                studentId: student?._id ? student._id.toString() : (entry.student_id ? entry.student_id.toString() : ""),
+                studentName: student?.username || student?.name || "Student",
+                username: student?.username || student?.name || "Student",
+                rollno: student?.rollno || "",
+                department: student?.department || "",
+                student_id: student
+            };
+        });
 
         res.status(200).json({
             examId,
