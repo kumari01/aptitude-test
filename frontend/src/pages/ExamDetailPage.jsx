@@ -160,7 +160,7 @@ export function ExamDetailPage() {
         </div>
       </div>
 
-      {sections.length > 0 ? (
+      {sections.length > 1 && (
         <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8 mb-6 shadow-sm">
           <h2 className="text-xl font-bold text-gray-900 mb-4" style={{ fontFamily: FONT_DISPLAY }}>
             Exam Sections
@@ -174,11 +174,6 @@ export function ExamDetailPage() {
               </div>
             ))}
           </div>
-        </div>
-      ) : (
-        <div className="bg-yellow-50 border border-yellow-100 p-4 rounded mb-6">
-          <strong className="block mb-1">No sections or questions</strong>
-          <div className="text-sm text-gray-700">This test does not have any sections or linked questions yet, so the question count shows 0.</div>
         </div>
       )}
 
