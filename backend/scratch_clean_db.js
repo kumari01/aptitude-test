@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 
 async function cleanDatabase() {
-  const mongoUri = process.env.MONGODB_URI || "mongodb+srv://kumarigadi_db_user:TMTzCe8PWhkIEhtK@cluster-quiz-app.ynsvbc4.mongodb.net/";
+  const mongoUri = process.env.MONGODB_URI || "mongodb+srv://<username>:<password>@cluster-quiz-app.ynsvbc4.mongodb.net/";
 
   console.log("Connecting to MongoDB...");
   await mongoose.connect(mongoUri);
