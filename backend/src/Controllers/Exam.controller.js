@@ -44,32 +44,44 @@ const startExam = async (req, res) => {
             });
         }
 
-        // Check for existing attempt by this student for this test
-        const query = {
-            $or: [{ testId: examId }, { exam_id: examId }],
-        };
-        if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
-            query.student_id = studentId;
+        const studentObjId = mongoose.Types.ObjectId.isValid(studentId) ? new mongoose.Types.ObjectId(studentId) : studentId;
+        const examObjId = mongoose.Types.ObjectId.isValid(examId) ? new mongoose.Types.ObjectId(examId) : examId;
+
+        // Check for existing attempt by this student for this test (handling string & ObjectId values)
+        const studentOrList = [{ student_id: studentId }];
+        if (mongoose.Types.ObjectId.isValid(studentId)) {
+            studentOrList.push({ student_id: studentObjId });
         }
 
-        let attempt = await ExamAttempt.findOne(query);
+        const examOrList = [{ testId: examId }, { exam_id: examId }];
+        if (mongoose.Types.ObjectId.isValid(examId)) {
+            examOrList.push({ testId: examObjId }, { exam_id: examObjId });
+        }
+
+        let attempt = await ExamAttempt.findOne({
+            $and: [
+                { $or: studentOrList },
+                { $or: examOrList }
+            ]
+        }).sort({ createdAt: -1 });
 
         if (!attempt) {
             attempt = new ExamAttempt({
-                testId: examId,
-                exam_id: examId,
-                student_id: studentId,
+                testId: examObjId,
+                exam_id: examObjId,
+                student_id: studentObjId,
                 started_at: new Date(),
                 status: "Started"
             });
             await attempt.save();
         } else {
-            // Update existing attempt document instead of creating duplicate documents
+            // Update existing attempt document in-place instead of creating duplicate documents
             attempt.started_at = new Date();
-            attempt.completed_at = null;
+            attempt.submitted_at = null;
             attempt.status = "Started";
             attempt.score = 0;
-            attempt.totalMarks = 0;
+            attempt.obtainedMarks = 0;
+            attempt.tab_switches = 0;
             await attempt.save();
         }
 

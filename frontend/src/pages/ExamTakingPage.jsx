@@ -253,10 +253,14 @@ export function ExamTakingPage() {
           return;
         }
 
+        // Do not show warning modal for copy/paste actions as per requirements
+        if (eventType === "COPY" || eventType === "PASTE") {
+          return;
+        }
+
         // Show Warning Modal Popup
         let detailMsg = "You navigated away from the exam window or switched tabs.";
         if (eventType === "FULLSCREEN_EXIT") detailMsg = "You exited fullscreen or resized the exam window.";
-        else if (eventType === "COPY" || eventType === "PASTE") detailMsg = "Copy/paste operation is strictly prohibited.";
 
         setWarningModal({
           eventType,
@@ -317,12 +321,15 @@ export function ExamTakingPage() {
       }
     };
 
-    const handleCopy = () => {
-      logProctoringEvent("COPY");
+    const handleCopy = (e) => {
+      if (e && e.preventDefault) e.preventDefault();
+      if (!isFullscreen()) {
+        requestFullscreen().catch(() => {});
+      }
     };
 
-    const handlePaste = () => {
-      logProctoringEvent("PASTE");
+    const handlePaste = (e) => {
+      if (e && e.preventDefault) e.preventDefault();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -333,6 +340,7 @@ export function ExamTakingPage() {
     document.addEventListener("msfullscreenchange", handleFullscreenChange);
     window.addEventListener("resize", handleResize);
     window.addEventListener("copy", handleCopy);
+    window.addEventListener("cut", handleCopy);
     window.addEventListener("paste", handlePaste);
 
     return () => {
@@ -344,6 +352,7 @@ export function ExamTakingPage() {
       document.removeEventListener("msfullscreenchange", handleFullscreenChange);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("copy", handleCopy);
+      window.removeEventListener("cut", handleCopy);
       window.removeEventListener("paste", handlePaste);
     };
   }, [proctoringEnabled, proctoringSessionId, attemptId]);

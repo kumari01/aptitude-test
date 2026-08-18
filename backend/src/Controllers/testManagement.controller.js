@@ -7,6 +7,7 @@ const Section = require("../model/sectionModel/section.model");
 const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
 const Question = require("../model/question.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
+const ProctoringSession = require("../model/proctoring/proctoringSession");
 const { Student } = require("../model/user.model");
 
 // Create a new test with settings & target group
@@ -115,7 +116,7 @@ const updateTestSettings = async (req, res) => {
         const setting = await TestSetting.findOneAndUpdate(
             { testId },
             { proctoringEnabled, tabSwitchLimit, autoSubmit },
-            { new: true, upsert: true, setDefaultsOnInsert: true }
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
         );
 
         res.status(200).json({
@@ -175,9 +176,9 @@ const scheduleTest = async (req, res) => {
         const assignments = [];
         for (const roll of validRollNumbers) {
             const assignment = await TestAssignment.findOneAndUpdate(
-                { testId, scheduleId: schedule._id, rollNumber: roll },
-                { attemptLimit: test.maxAttempts || 1, status: "Assigned" },
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { testId, scheduleId: schedule._id, $or: [{ rollno: roll }, { rollNumber: roll }] },
+                { testId, scheduleId: schedule._id, rollno: roll, rollNumber: roll, attemptLimit: test.maxAttempts || 1, status: "Assigned" },
+                { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
             );
             assignments.push(assignment);
         }
@@ -399,9 +400,39 @@ const getAdminAttempts = async (req, res) => {
             .sort({ updatedAt: -1 })
             .limit(100);
 
-        const formatted = attempts.map(att => {
+        const attemptIds = attempts.map(a => a._id);
+        const sessions = await ProctoringSession.find({ attemptId: { $in: attemptIds } });
+        const sessionMap = new Map();
+        sessions.forEach(s => {
+            sessionMap.set(s.attemptId.toString(), s.tabSwitchCount || 0);
+        });
+
+        // Deduplicate attempts per student + test to ensure single consolidated telemetry row per attempt
+        const uniqueMap = new Map();
+        for (const att of attempts) {
+            const studentIdStr = att.student_id?._id?.toString() || att.student_id?.toString() || att.rollNumber || "unknown";
+            const testIdStr = att.testId?._id?.toString() || att.exam_id?.toString() || att.testId?.toString() || "test";
+            const key = `${studentIdStr}_${testIdStr}`;
+
+            if (!uniqueMap.has(key)) {
+                uniqueMap.set(key, att);
+            } else {
+                const existing = uniqueMap.get(key);
+                // Prefer submitted/auto-submitted over started, or newer updated
+                if (existing.status === "Started" && att.status !== "Started") {
+                    uniqueMap.set(key, att);
+                }
+            }
+        }
+
+        const consolidatedAttempts = Array.from(uniqueMap.values());
+
+        const formatted = consolidatedAttempts.map(att => {
             const student = att.student_id;
             const test = att.testId;
+            const sessionSwitches = sessionMap.get(att._id.toString()) || 0;
+            const finalSwitches = Math.max(att.tab_switches || 0, sessionSwitches);
+
             return {
                 id: att._id,
                 studentName: student?.username || student?.name || "Student",
@@ -412,7 +443,7 @@ const getAdminAttempts = async (req, res) => {
                 score: att.score || 0,
                 obtainedMarks: att.obtainedMarks || 0,
                 totalMarks: test?.totalMarks || 0,
-                tabSwitches: att.tab_switches || 0,
+                tabSwitches: finalSwitches,
                 status: att.status || "Submitted",
                 date: att.submitted_at || att.updatedAt || att.started_at
             };

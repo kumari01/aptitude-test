@@ -4,8 +4,12 @@ const leaderboardSchema = new mongoose.Schema(
     {
         testId: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Test",
-            required: true
+            ref: "Test"
+        },
+
+        exam_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Test"
         },
 
         attempt_id: {
@@ -37,7 +41,8 @@ const leaderboardSchema = new mongoose.Schema(
         }
     },
     {
-        timestamps: true
+        timestamps: true,
+        strict: false
     }
 );
 

@@ -68,6 +68,12 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
             }
         );
 
+        if (updatedSession?.attemptId) {
+            await ExamAttempt.findByIdAndUpdate(updatedSession.attemptId, {
+                $inc: { tab_switches: 1 }
+            });
+        }
+
         // 3rd TAB_SWITCH = automatic submission
         if (updatedSession.tabSwitchCount >= 3) {
 
