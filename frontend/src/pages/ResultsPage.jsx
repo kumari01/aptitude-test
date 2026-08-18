@@ -1,61 +1,42 @@
 import React, { useState, useEffect } from "react";
-import { Search, Clock, Calendar, CheckCircle2, TrendingUp, Trophy, AlertCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, Clock, Calendar, CheckCircle2, TrendingUp, Trophy, Loader2 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import StatusPill from "../components/common/StatusPill";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
-import axios from "axios";
+import api from "../api/axios";
 
 export function ResultsPage() {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
-  const [resultsList, setResultsList] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalAttempts: 0,
     passed: 0,
     avgScore: "0%",
     best: "0%",
   });
-  const [loading, setLoading] = useState(true);
+  const [attempts, setAttempts] = useState([]);
 
   useEffect(() => {
     async function fetchResults() {
       try {
         setLoading(true);
-        const token = localStorage.getItem("token");
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-        const res = await axios.get("http://localhost:3000/api/auth/student/progress", {
-          withCredentials: true,
-          headers,
-        });
-
+        const res = await api.get("/auth/student/progress");
         if (res.data) {
-          const attempts = res.data.recentAttempts || [];
-          const passedCount = attempts.filter((a) => a.status === "Passed").length;
-
           setStats({
-            totalAttempts: res.data.examsCompleted || attempts.length,
-            passed: passedCount,
+            totalAttempts: res.data.totalAttempts ?? res.data.examsCompleted ?? 0,
+            passed: res.data.passedCount ?? 0,
             avgScore: res.data.avgScore || "0%",
             best: res.data.bestScore || "0%",
           });
-
-          const formatted = attempts.map((a, idx) => ({
-            id: a.id || idx,
-            title: a.title,
-            category: "Exam Attempt",
-            detail: a.marks,
-            date: a.date,
-            score: a.score,
-            fraction: a.marks,
-            time: "Completed",
-            status: a.status,
-          }));
-
-          setResultsList(formatted);
+          if (res.data.recentAttempts) {
+            setAttempts(res.data.recentAttempts);
+          }
         }
       } catch (err) {
-        console.warn("Error fetching student results:", err);
+        console.warn("Failed to fetch student results history:", err);
       } finally {
         setLoading(false);
       }
@@ -64,9 +45,9 @@ export function ResultsPage() {
     fetchResults();
   }, []);
 
-  const rows = resultsList.filter((r) => {
+  const rows = attempts.filter((r) => {
     if (filter !== "All" && r.status !== filter) return false;
-    if (query && !r.title.toLowerCase().includes(query.toLowerCase())) return false;
+    if (query && !(r.title || "").toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
 
@@ -119,7 +100,7 @@ export function ResultsPage() {
           />
         </div>
         <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
-          {["All", "Passed", "Failed"].map((f) => (
+          {["All", "Passed", "Failed", "Disqualified"].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -134,26 +115,31 @@ export function ResultsPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto shadow-sm">
-        {loading ? (
-          <div className="p-8 text-center text-gray-500 text-sm">Loading results...</div>
-        ) : rows.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400">
-              <AlertCircle size={24} />
-            </div>
-            <h4 className="font-bold text-gray-800 mb-1">No Results Found</h4>
-            <p className="text-xs text-gray-500">You haven't completed any exam attempts yet.</p>
-          </div>
-        ) : (
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+          <Loader2 className="animate-spin mb-3" size={32} />
+          <p className="font-medium">Loading your exam history...</p>
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">
+          <Trophy size={40} className="mx-auto mb-3 text-gray-300" />
+          <h3 className="text-lg font-bold text-gray-900 mb-1" style={{ fontFamily: FONT_DISPLAY }}>
+            No results found
+          </h3>
+          <p className="text-sm text-gray-500">
+            {attempts.length === 0 ? "You haven't completed any exam attempts yet." : "No attempts match your search filter."}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto shadow-sm">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-400 text-xs tracking-wide border-b border-gray-100">
                 <th className="font-semibold px-6 py-3">EXAM</th>
                 <th className="font-semibold px-6 py-3">DATE</th>
                 <th className="font-semibold px-6 py-3">SCORE</th>
-                <th className="font-semibold px-6 py-3">TIME</th>
                 <th className="font-semibold px-6 py-3">STATUS</th>
+                <th className="font-semibold px-6 py-3 text-right">ACTION</th>
               </tr>
             </thead>
             <tbody>
@@ -162,7 +148,7 @@ export function ResultsPage() {
                   <td className="px-6 py-4">
                     <div className="font-semibold text-gray-900">{r.title}</div>
                     <div className="text-xs text-gray-400">
-                      {r.category} · {r.detail}
+                      {r.category}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-gray-600">{r.date}</td>
@@ -170,20 +156,23 @@ export function ResultsPage() {
                     <div className="font-bold text-gray-900">{r.score}</div>
                     <div className="text-xs text-gray-400">{r.fraction}</div>
                   </td>
-                  <td className="px-6 py-4 text-gray-600">
-                    <span className="flex items-center gap-1.5">
-                      <Clock size={13} className="text-gray-400" /> {r.time}
-                    </span>
-                  </td>
                   <td className="px-6 py-4">
                     <StatusPill status={r.status} />
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button
+                      onClick={() => navigate(`/exams/${r.examId || '1'}/result`, { state: { attemptId: r.id, disqualified: r.disqualified } })}
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      View Scorecard
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

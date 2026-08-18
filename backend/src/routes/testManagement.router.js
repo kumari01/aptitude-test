@@ -24,10 +24,16 @@ router.post("/sections/:sectionId/questions", authenticate, requireAdmin, contro
 
 // Get complete details of a test (sections, settings, schedules)
 router.get("/student/assigned", authenticate, controller.listStudentAssignedTests);
-router.get("/:testId", authenticate, controller.getTestDetails);
 
-// Delete routes
-router.delete("/all", authenticate, requireAdmin, controller.deleteAllTests);
-router.delete("/:testId", authenticate, requireAdmin, controller.deleteTest);
+// Admin: list all tests for admin dashboard
+router.get("/admin/all", authenticate, requireAdmin, controller.listAllTests);
+
+// Admin: summary overview metrics
+router.get("/admin/overview", authenticate, requireAdmin, controller.getAdminOverview);
+
+// Admin: all student exam attempts log
+router.get("/admin/attempts", authenticate, requireAdmin, controller.getAdminAttempts);
+
+router.get("/:testId", authenticate, controller.getTestDetails);
 
 module.exports = router;

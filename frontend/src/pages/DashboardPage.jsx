@@ -8,44 +8,30 @@ import {
   Award,
   TrendingUp,
   Trophy,
-  AlertCircle
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
-import { STATS, LEADERBOARD, RECENT_WEEKS } from "../data/mockData";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
-import AdminDashboardPage from "./AdminDashboardPage";
-import axios from "axios";
 import api from "../api/axios";
+import AdminDashboardPage from "./AdminDashboardPage";
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const [student, setStudent] = useState(null);
   const [progress, setProgress] = useState(null);
-  const [assignedExams, setAssignedExams] = useState([]);
+  const [liveExam, setLiveExam] = useState(null);
+  const [totalAssignedCount, setTotalAssignedCount] = useState(0);
+  const [leaderboard, setLeaderboard] = useState([]);
 
   const isAdmin = !!localStorage.getItem("admin");
 
   useEffect(() => {
+    if (isAdmin) return;
+
     const fetchData = async () => {
-      const savedAdmin = localStorage.getItem("admin");
-      if (savedAdmin) {
-        setStudent(JSON.parse(savedAdmin));
-        return;
-      }
-
       try {
-        const token = localStorage.getItem("token");
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-        const [profileRes, progressRes, examsRes] = await Promise.all([
-          axios.get("http://localhost:3000/api/auth/student/profile", {
-            withCredentials: true,
-            headers,
-          }),
-          axios.get("http://localhost:3000/api/auth/student/progress", {
-            withCredentials: true,
-            headers,
-          }).catch(() => null),
+        const [profileRes, progressRes, assignedRes] = await Promise.all([
+          api.get("/auth/student/profile"),
+          api.get("/auth/student/progress").catch(() => null),
           api.get("/test-management/student/assigned").catch(() => null),
         ]);
 
@@ -55,17 +41,33 @@ export function DashboardPage() {
         if (progressRes?.data) {
           setProgress(progressRes.data);
         }
-        if (examsRes?.data?.tests) {
-          const formatted = examsRes.data.tests.map(({ test, setting, schedule }) => ({
-            id: test._id,
-            title: test.title,
-            category: test.testType || "Aptitude",
-            minutes: test.duration_minutes || test.durationMinutes || 30,
-            questions: test.totalMarks || 10,
-            live: test.status === "Published",
-            due: schedule?.endAt ? new Date(schedule.endAt).toLocaleDateString() : "No deadline",
-          }));
-          setAssignedExams(formatted);
+        if (assignedRes?.data?.tests) {
+          setTotalAssignedCount(assignedRes.data.tests.length);
+        }
+        // Use the first assigned test for the LIVE banner
+        if (assignedRes?.data?.tests && assignedRes.data.tests.length > 0) {
+          const first = assignedRes.data.tests[0];
+          const targetExamId = first.test._id;
+          setLiveExam({
+            id: targetExamId,
+            title: first.test.title,
+            questions: 10,
+            minutes: 30,
+            due: first.schedule?.endAt
+              ? new Date(first.schedule.endAt).toLocaleDateString()
+              : "Scheduled",
+            attemptStatus: first.attempt?.status,
+            attemptId: first.attempt?._id,
+          });
+
+          // Fetch leaderboard for this test if available
+          api.get(`/leaderboard/${targetExamId}`)
+            .then((lbRes) => {
+              if (lbRes.data?.leaderboard) {
+                setLeaderboard(lbRes.data.leaderboard);
+              }
+            })
+            .catch(() => null);
         }
       } catch (error) {
         console.error("Dashboard fetch error:", error);
@@ -80,13 +82,11 @@ export function DashboardPage() {
     };
 
     fetchData();
-  }, [navigate]);
+  }, [navigate, isAdmin]);
 
   if (isAdmin) {
     return <AdminDashboardPage />;
   }
-
-  const activeExam = assignedExams.find(e => e.live) || assignedExams[0];
 
   const handleStartExam = (id) => {
     navigate(`/exams/${id}`);
@@ -95,100 +95,89 @@ export function DashboardPage() {
   return (
     <div className="px-4 sm:px-6 md:px-10 py-6 max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
-        Hi, {student ? student.username : "Student"}
+        Hi, {student ? (student.username || student.name) : "Student"}
       </h1>
       <p className="text-gray-500 mt-1 mb-6">Here's your weekly exam status</p>
 
       {/* LIVE EXAM BANNER */}
-      {activeExam ? (
-        <div
-          className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-6 relative overflow-hidden shadow-sm"
-          style={{ background: INK }}
-        >
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <span
-                className="text-[11px] font-bold tracking-wide text-white px-2.5 py-1 rounded-full"
-                style={{ background: BRAND }}
-              >
-                LIVE NOW
-              </span>
-              <span className="text-gray-400 text-sm">Active Exam</span>
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: FONT_DISPLAY }}>
-              {activeExam.title}
-            </h2>
-            <div className="flex flex-wrap items-center gap-4 sm:gap-5 text-gray-400 text-sm">
-              <span className="flex items-center gap-1.5">
-                <FileText size={15} /> {activeExam.questions} questions
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Clock size={15} /> {activeExam.minutes} minutes
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Calendar size={15} /> Due {activeExam.due}
-              </span>
-            </div>
+      <div
+        className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-6 relative overflow-hidden shadow-sm"
+        style={{ background: INK }}
+      >
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <span
+              className="text-[11px] font-bold tracking-wide text-white px-2.5 py-1 rounded-full"
+              style={{ background: BRAND }}
+            >
+              LIVE NOW
+            </span>
+            <span className="text-gray-400 text-sm">This Week's Exam</span>
           </div>
+          <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: FONT_DISPLAY }}>
+            {liveExam ? liveExam.title : "No exams assigned yet"}
+          </h2>
+          <div className="flex flex-wrap items-center gap-4 sm:gap-5 text-gray-400 text-sm">
+            <span className="flex items-center gap-1.5">
+              <FileText size={15} /> {liveExam ? liveExam.questions : 0} questions
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Clock size={15} /> {liveExam ? liveExam.minutes : 0} minutes
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Calendar size={15} /> Due {liveExam ? liveExam.due : "—"}
+            </span>
+          </div>
+        </div>
+        {liveExam?.attemptStatus === "Submitted" || liveExam?.attemptStatus === "Auto Submitted" || liveExam?.attemptStatus === "Completed" ? (
           <button
-            onClick={() => handleStartExam(activeExam.id)}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0"
+            onClick={() => navigate(`/exams/${liveExam.id}/result`, { state: { attemptId: liveExam.attemptId, disqualified: liveExam.attemptStatus === "Auto Submitted" } })}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 bg-slate-800"
+          >
+            View Result <ArrowRight size={16} />
+          </button>
+        ) : (
+          <button
+            onClick={() => liveExam && handleStartExam(liveExam.id)}
+            disabled={!liveExam}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50"
             style={{ background: BRAND }}
           >
-            Take Exam <ArrowRight size={16} />
+            {liveExam?.attemptStatus === "Started" ? "Resume Exam" : "Take Exam"} <ArrowRight size={16} />
           </button>
-        </div>
-      ) : (
-        <div
-          className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-6 relative overflow-hidden shadow-sm border border-gray-200 bg-white"
-        >
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 shrink-0 mt-1">
-              <AlertCircle size={24} />
-            </div>
-            <div>
-              <span className="text-[11px] font-bold tracking-wide text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
-                NO ACTIVE EXAM
-              </span>
-              <h2 className="text-xl font-bold text-gray-900 mt-2 mb-1" style={{ fontFamily: FONT_DISPLAY }}>
-                No exams scheduled right now
-              </h2>
-              <p className="text-sm text-gray-500">
-                When an administrator creates and publishes a new exam for you, it will appear here.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* STATS GRID */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
           label="Your Rank"
-          value={STATS.rank}
-          delta={STATS.rankDelta}
+          value={progress?.rank || "—"}
           icon={<Award size={17} />}
           iconBg="#FEF3C7"
           iconColor="#D97706"
         />
         <StatCard
           label="Avg Score"
-          value={progress ? progress.avgScore : STATS.avgScore}
-          delta={STATS.avgDelta}
+          value={progress ? progress.avgScore : "0%"}
           icon={<TrendingUp size={17} />}
           iconBg="#DCFCE7"
           iconColor="#16A34A"
         />
         <StatCard
           label="Exams Completed"
-          value={progress ? `${progress.examsCompleted}` : "0"}
+          value={
+            progress
+              ? `${progress.examsCompleted} / ${progress.totalConducted || Math.max(totalAssignedCount, progress.examsCompleted)}`
+              : "0 / 0"
+          }
           icon={<FileText size={17} />}
           iconBg="#DBEAFE"
           iconColor="#2563EB"
         />
         <StatCard
           label="Best Score"
-          value={progress ? progress.bestScore : STATS.best}
+          value={progress ? progress.bestScore : "0%"}
           icon={<Trophy size={17} />}
           iconBg="#FCE7E9"
           iconColor={BRAND}
@@ -202,66 +191,79 @@ export function DashboardPage() {
             <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
               Leaderboard
             </h3>
-            <span className="text-sm text-gray-400 cursor-pointer hover:text-gray-600">Last week's results</span>
+            <span className="text-sm text-gray-400">Exam Standings</span>
           </div>
-          <div className="space-y-1">
-            {LEADERBOARD.map((p) => (
-              <div
-                key={p.rank}
-                className={`flex items-center justify-between py-3 px-3 rounded-lg ${
-                  p.isYou ? "bg-gray-50 border border-gray-100" : ""
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                      p.rank === 1 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
-                    {p.rank}
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-gray-900">
-                      {p.name} {p.isYou && <span className="text-xs text-gray-400 font-normal">(You)</span>}
+          {leaderboard.length === 0 ? (
+            <p className="text-sm text-gray-400 py-6 text-center">No leaderboard entries available yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {leaderboard.map((p, idx) => (
+                <div
+                  key={p._id || idx}
+                  className={`flex items-center justify-between py-3 px-3 rounded-lg ${
+                    p.studentId === student?._id ? "bg-gray-50 border border-gray-100" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                        (p.rank || idx + 1) === 1 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {p.rank || idx + 1}
                     </div>
-                    <div className="text-xs text-gray-400">{p.roll}</div>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        {p.studentName || p.username || p.student_id?.username || p.student_id?.name || "Student"}{" "}
+                        {(p.studentId === student?._id || p.student_id?._id === student?._id) && (
+                          <span className="text-xs text-gray-400 font-normal">(You)</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-400 font-mono">
+                        {p.rollno || p.student_id?.rollno || ""}
+                      </div>
+                    </div>
                   </div>
+                  <span className="text-sm font-bold text-gray-900">{p.score}%</span>
                 </div>
-                <span className="text-sm font-bold text-gray-900">{p.score}%</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
           <h3 className="text-lg font-bold text-gray-900 mb-4" style={{ fontFamily: FONT_DISPLAY }}>
-            Recent Weeks
+            Recent Attempts
           </h3>
           <div className="space-y-4">
-            {(progress?.recentAttempts?.length ? progress.recentAttempts : RECENT_WEEKS).map((w, idx) => (
-              <div key={w.id || w.week || idx} className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-gray-900">{w.title || w.week}</div>
-                  <div className="text-xs text-gray-400">{w.marks}</div>
-                </div>
-                <div className="text-right">
-                  <div
-                    className={`text-sm font-bold ${
-                      w.status === "Passed" ? "text-emerald-600" : "text-red-500"
-                    }`}
-                  >
-                    {w.score || w.pct}
+            {(!progress?.recentAttempts || progress.recentAttempts.length === 0) ? (
+              <p className="text-sm text-gray-400 py-4">No recent attempts recorded yet.</p>
+            ) : (
+              progress.recentAttempts.slice(0, 5).map((w, idx) => (
+                <div key={w.id || idx} className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">{w.title}</div>
+                    <div className="text-xs text-gray-400">{w.date}</div>
                   </div>
-                  <div
-                    className={`text-xs ${
-                      w.status === "Passed" ? "text-emerald-600" : "text-red-500"
-                    }`}
-                  >
-                    {w.status}
+                  <div className="text-right">
+                    <div
+                      className={`text-sm font-bold ${
+                        w.status === "Passed" ? "text-emerald-600" : "text-red-500"
+                      }`}
+                    >
+                      {w.score}
+                    </div>
+                    <div
+                      className={`text-xs ${
+                        w.status === "Passed" ? "text-emerald-600" : "text-red-500"
+                      }`}
+                    >
+                      {w.status}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
             <button
               onClick={() => navigate("/results")}
               className="text-sm font-semibold pt-2 flex items-center gap-1 hover:underline"

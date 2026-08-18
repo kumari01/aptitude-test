@@ -1,93 +1,116 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronLeft, FileText, Clock, CheckCircle2, AlertTriangle, ArrowRight, ShieldAlert, AlertCircle } from "lucide-react";
+import { ChevronLeft, FileText, Clock, CheckCircle2, AlertTriangle, ArrowRight, ShieldAlert, X, Maximize2 } from "lucide-react";
 import { BRAND, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
+import { useToast } from "../context/ToastContext";
+import { requestFullscreen } from "../utils/fullscreen";
 
 export function ExamDetailPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
-
-  const [exam, setExam] = useState(null);
+  const [exam, setExam] = useState({ title: "Loading...", category: "Aptitude", minutes: 30, totalMarks: 0 });
   const [setting, setSetting] = useState(null);
   const [sections, setSections] = useState([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState(null);
+  const [showFullscreenPopup, setShowFullscreenPopup] = useState(false);
+  const [attemptInfo, setAttemptInfo] = useState(null);
+  const toast = useToast();
 
   useEffect(() => {
     async function fetchTestDetails() {
       try {
         setLoading(true);
-        setError(false);
-        const res = await api.get(`/test-management/${examId}`);
+        setError(null);
+        const [res, assignedRes] = await Promise.all([
+          api.get(`/test-management/${examId}`),
+          api.get('/test-management/student/assigned').catch(() => null),
+        ]);
+
+        if (assignedRes?.data?.tests) {
+          const match = assignedRes.data.tests.find((t) => t.test._id === examId);
+          if (match?.attempt) setAttemptInfo(match.attempt);
+        }
+
         if (res.data?.test) {
-          const { test: testData, setting: setObj, sections: secList } = res.data;
+          const { test: testData, setting: setObj, sections: secList, totalQuestions } = res.data;
+          const qCount = typeof totalQuestions === 'number' ? totalQuestions : (testData.totalQuestions || (secList ? secList.reduce((sum, sec) => sum + (sec.questionCount || 0), 0) : 0));
+          const tMarks = testData.totalMarks || (qCount > 0 ? qCount * 1 : 10);
+          const pMarks = testData.passingMarks || Math.ceil(tMarks * 0.4);
+
           setExam({
             id: testData._id,
             title: testData.title,
             category: testData.testType || "Aptitude",
-            minutes: testData.duration_minutes || testData.durationMinutes || 30,
-            totalMarks: testData.totalMarks || 10,
+            minutes: testData.durationMinutes || 30,
+            totalMarks: tMarks,
+            passingMarks: pMarks
           });
+
+          setQuestionCount(qCount);
           if (setObj) setSetting(setObj);
-          if (secList) {
-            setSections(secList);
-            const totalQ = secList.reduce((acc, s) => acc + (s.questions?.length || 0), 0);
-            setQuestionCount(totalQ || testData.totalMarks || 10);
-          } else {
-            setQuestionCount(testData.totalMarks || 10);
-          }
-        } else {
-          setError(true);
+          if (secList) setSections(secList);
         }
+        setLoading(false);
       } catch (err) {
-        console.warn("Error fetching exam details:", err);
-        setError(true);
-      } finally {
+        // If unauthorized, send user to login. Otherwise surface error.
+        if (err.response?.status === 401) {
+          navigate('/login');
+          return;
+        }
+        console.warn("Using mock exam detail fallback:", err.message);
+        setError(err.message || 'Failed to load exam details');
         setLoading(false);
       }
     }
-
+    
     fetchTestDetails();
   }, [examId]);
 
-  const handleBeginExam = () => {
-    if (questionCount === 0) {
-      alert("This exam does not have any questions added yet. Please ask your administrator to add questions before taking it.");
-      return;
-    }
-    navigate(`/exams/${examId}/take`);
-  };
-
   if (loading) {
     return (
-      <div className="px-4 sm:px-6 md:px-10 py-12 max-w-4xl mx-auto text-center text-gray-500">
-        Loading test details...
+      <div className="px-4 sm:px-6 md:px-10 py-6 max-w-4xl mx-auto">Loading exam details...</div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-4 sm:px-6 md:px-10 py-6 max-w-4xl mx-auto">
+        <div className="bg-red-50 border border-red-100 text-red-700 p-4 rounded">
+          <strong className="block mb-1">Unable to load exam</strong>
+          <div className="text-sm">{error}</div>
+          <div className="mt-3">
+            <button onClick={() => navigate('/login')} className="underline text-sm">Go to Login</button>
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (error || !exam) {
-    return (
-      <div className="px-4 sm:px-6 md:px-10 py-12 max-w-xl mx-auto text-center">
-        <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-          <AlertCircle size={28} />
-        </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Test Not Found</h2>
-        <p className="text-sm text-gray-500 mb-6">
-          The requested test is not available or has not been assigned to you.
-        </p>
-        <button
-          onClick={() => navigate("/exams")}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold text-sm"
-          style={{ background: BRAND }}
-        >
-          <ChevronLeft size={16} /> Back to Exams
-        </button>
-      </div>
-    );
-  }
+  const handleBeginExam = () => {
+    setShowFullscreenPopup(true);
+  };
+
+  const confirmAndEnterFullscreen = async () => {
+    setShowFullscreenPopup(false);
+    try {
+      await requestFullscreen();
+      navigate(`/exams/${examId}/take`);
+    } catch (err) {
+      toast.error(
+        "Unable to enter fullscreen mode. Please allow fullscreen permission and try again."
+      );
+    }
+  };
+
+  const declineFullscreen = () => {
+    setShowFullscreenPopup(false);
+  };
+
+  const isCompleted = attemptInfo?.status === "Submitted" || attemptInfo?.status === "Auto Submitted" || attemptInfo?.status === "Completed";
+  const isStarted = attemptInfo?.status === "Started";
 
   return (
     <div className="px-4 sm:px-6 md:px-10 py-6 max-w-4xl mx-auto">
@@ -126,27 +149,28 @@ export function ExamDetailPage() {
           </div>
           <div className="bg-gray-50 rounded-xl py-5 text-center">
             <CheckCircle2 size={20} className="mx-auto mb-2 text-gray-500" />
-            <div className="text-lg font-bold text-gray-900">{exam.totalMarks || questionCount}</div>
+            <div className="text-lg font-bold text-gray-900">{exam.totalMarks}</div>
             <div className="text-xs text-gray-500">Total Marks</div>
           </div>
           <div className="bg-gray-50 rounded-xl py-5 text-center">
             <AlertTriangle size={20} className="mx-auto mb-2 text-gray-500" />
-            <div className="text-lg font-bold text-gray-900">{Math.ceil((exam.totalMarks || questionCount) * 0.4)}</div>
+            <div className="text-lg font-bold text-gray-900">{exam.passingMarks || Math.ceil(exam.totalMarks * 0.4)}</div>
             <div className="text-xs text-gray-500">Passing Marks</div>
           </div>
         </div>
       </div>
 
-      {sections.length > 0 && (
+      {sections.length > 1 && (
         <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8 mb-6 shadow-sm">
           <h2 className="text-xl font-bold text-gray-900 mb-4" style={{ fontFamily: FONT_DISPLAY }}>
             Exam Sections
           </h2>
           <div className="grid sm:grid-cols-2 gap-3">
-            {sections.map(({ section }) => (
+            {sections.map(({ section, questionCount }) => (
               <div key={section._id} className="p-4 border border-gray-100 bg-gray-50 rounded-xl">
                 <h4 className="font-bold text-gray-800">{section.name}</h4>
                 <p className="text-xs text-gray-500 mt-1">Total Marks: {section.totalMarks || 10}</p>
+                <p className="text-xs text-gray-500 mt-1">Questions: {questionCount}</p>
               </div>
             ))}
           </div>
@@ -176,13 +200,88 @@ export function ExamDetailPage() {
         </ol>
       </div>
 
-      <button
-        onClick={handleBeginExam}
-        className="flex items-center gap-2 text-white font-semibold px-7 py-3.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm"
-        style={{ background: BRAND }}
-      >
-        Start Exam <ArrowRight size={16} />
-      </button>
+      {isCompleted ? (
+        <button
+          onClick={() => navigate(`/exams/${examId}/result`, { state: { attemptId: attemptInfo._id, disqualified: attemptInfo.status === "Auto Submitted" } })}
+          className="flex items-center gap-2 text-white font-semibold px-7 py-3.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm bg-slate-800"
+        >
+          View Result <ArrowRight size={16} />
+        </button>
+      ) : isStarted ? (
+        <button
+          onClick={handleBeginExam}
+          className="flex items-center gap-2 text-white font-semibold px-7 py-3.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm"
+          style={{ background: BRAND }}
+        >
+          Resume Exam <ArrowRight size={16} />
+        </button>
+      ) : (
+        <button
+          onClick={handleBeginExam}
+          className="flex items-center gap-2 text-white font-semibold px-7 py-3.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm"
+          style={{ background: BRAND }}
+        >
+          Start Exam <ArrowRight size={16} />
+        </button>
+      )}
+
+      {/* Fullscreen Permission Popup */}
+      {showFullscreenPopup && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4"
+          onClick={declineFullscreen}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 text-center relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={declineFullscreen}
+              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center transition-colors"
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
+
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: `${BRAND}15` }}
+            >
+              <Maximize2 size={28} style={{ color: BRAND }} />
+            </div>
+
+            <h2 className="text-2xl font-bold text-gray-900 mb-3" style={{ fontFamily: FONT_DISPLAY }}>
+              Fullscreen Permission Required
+            </h2>
+
+            <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+              This exam requires <strong>fullscreen mode</strong> to ensure a secure and
+              distraction-free environment. The browser will request permission to enter
+              fullscreen.
+            </p>
+
+            <p className="text-xs text-gray-500 mb-6">
+              Do you want to proceed with entering fullscreen mode?
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={declineFullscreen}
+                className="flex-1 px-5 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+              >
+                No, Stay Here
+              </button>
+              <button
+                onClick={confirmAndEnterFullscreen}
+                className="flex-1 px-5 py-2.5 text-sm font-semibold text-white rounded-xl hover:opacity-90 transition-opacity shadow-sm"
+                style={{ background: BRAND }}
+              >
+                Yes, Enter Fullscreen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

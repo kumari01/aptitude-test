@@ -16,7 +16,6 @@ export default function App() {
     <Routes>
       {/* Auth route */}
       <Route path="/login" element={<LoginPage />} />
-
       {/* Main app layout routes */}
       <Route element={<MainLayout />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -27,11 +26,9 @@ export default function App() {
         <Route path="/results" element={<ResultsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
-
       {/* Full-screen exam flow routes */}
       <Route path="/exams/:examId/take" element={<ExamTakingPage />} />
       <Route path="/exams/:examId/result" element={<ExamResultPage />} />
-
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

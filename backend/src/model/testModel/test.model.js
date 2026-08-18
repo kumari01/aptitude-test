@@ -8,7 +8,7 @@ const testSchema = new mongoose.Schema({
     },
     testType: {
         type: String,
-        enum: ["Practice", "Assessment", "Exam", "Aptitude", "Technical", "Logical", "Verbal", "Core Engineering"],
+        enum: ["Practice", "Assessment", "Exam", "Aptitude", "Technical", "Reasoning", "Verbal", "Coding"],
         default: "Aptitude"
     },
     status: {
@@ -16,13 +16,13 @@ const testSchema = new mongoose.Schema({
         enum: ["Draft", "Published", "Archived"],
         default: "Draft"
     },
-    duration_minutes: {
-        type: Number,
-        default: 30
-    },
     totalMarks: {
         type: Number,
         default: 0
+    },
+    durationMinutes: {
+        type: Number,
+        default: 30
     },
     maxAttempts: {
         type: Number,
