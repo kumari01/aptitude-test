@@ -638,9 +638,9 @@ export function ExamsPage() {
                 </div>
               </div>
 
-              {e.attemptStatus === "Submitted" || e.attemptStatus === "Auto Submitted" || e.attemptStatus === "Completed" ? (
+              {["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(e.attemptStatus) ? (
                 <button
-                  onClick={() => navigate(`/exams/${e.id}/result`, { state: { attemptId: e.attemptId, disqualified: e.attemptStatus === "Auto Submitted" } })}
+                  onClick={() => navigate(`/exams/${e.id}/result`, { state: { attemptId: e.attemptId, disqualified: e.attemptStatus === "Auto Submitted" || e.attemptStatus === "Disqualified" } })}
                   className="w-full flex items-center justify-center gap-2 bg-slate-800 text-white font-semibold py-3 rounded-xl hover:bg-slate-900 transition-opacity"
                 >
                   View Result <ArrowRight size={15} />

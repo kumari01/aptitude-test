@@ -48,7 +48,6 @@ export function ExamTakingPage() {
   useEffect(() => { proctoringSessionIdRef.current = proctoringSessionId; }, [proctoringSessionId]);
   useEffect(() => { tabSwitchLimitRef.current = tabSwitchLimit; }, [tabSwitchLimit]);
   useEffect(() => { warningModalRef.current = warningModal; }, [warningModal]);
-
   // Trigger immediate disqualification and auto-submission
   const triggerDisqualification = async (reason) => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -70,7 +69,7 @@ export function ExamTakingPage() {
       }
     } else if (currAttemptId) {
       try {
-        await api.post("/answers/submit", { attemptId: currAttemptId });
+        await api.post("/answers/submit", { attemptId: currAttemptId, submissionType: "Disqualified" });
       } catch (err) {
         console.warn("Fallback submit error:", err);
       }
@@ -140,6 +139,13 @@ export function ExamTakingPage() {
         const res = await api.post(`/exams/${examId}/start`);
         if (res.data) {
           const { attempt, exam: examData, questions: qData, proctoringSession } = res.data;
+          
+          if (attempt?.status && ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status)) {
+            toast.error("This exam has already been submitted and cannot be resumed.");
+            navigate(`/exams/${examId}/result`, { state: { attemptId: attempt._id, disqualified: attempt.status === "Auto Submitted" || attempt.status === "Disqualified" }, replace: true });
+            return;
+          }
+
           if (attempt?._id) setAttemptId(attempt._id);
           
           if (proctoringSession?._id) {
@@ -210,7 +216,13 @@ export function ExamTakingPage() {
           }
         }
       } catch (err) {
-        console.warn("Using local mock test session fallback:", err);
+        console.warn("Exam start error:", err);
+        const msg = err.response?.data?.message || "Exam cannot be started or resumed.";
+        if (err.response?.status === 400 || err.response?.status === 403) {
+          toast.error(msg);
+          navigate("/dashboard", { replace: true });
+          return;
+        }
       } finally {
         setLoading(false);
       }
@@ -275,10 +287,14 @@ export function ExamTakingPage() {
           return;
         }
 
+        // Do not show warning modal for copy/paste actions as per requirements
+        if (eventType === "COPY" || eventType === "PASTE") {
+          return;
+        }
+
         // Show Warning Modal Popup
         let detailMsg = "You navigated away from the exam window or switched tabs.";
         if (eventType === "FULLSCREEN_EXIT") detailMsg = "You exited fullscreen or resized the exam window.";
-        else if (eventType === "COPY" || eventType === "PASTE") detailMsg = "Copy/paste operation is strictly prohibited.";
 
         setWarningModal({
           eventType,
@@ -339,12 +355,15 @@ export function ExamTakingPage() {
       }
     };
 
-    const handleCopy = () => {
-      logProctoringEvent("COPY");
+    const handleCopy = (e) => {
+      if (e && e.preventDefault) e.preventDefault();
+      if (!isFullscreen()) {
+        requestFullscreen().catch(() => {});
+      }
     };
 
-    const handlePaste = () => {
-      logProctoringEvent("PASTE");
+    const handlePaste = (e) => {
+      if (e && e.preventDefault) e.preventDefault();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -355,6 +374,7 @@ export function ExamTakingPage() {
     document.addEventListener("msfullscreenchange", handleFullscreenChange);
     window.addEventListener("resize", handleResize);
     window.addEventListener("copy", handleCopy);
+    window.addEventListener("cut", handleCopy);
     window.addEventListener("paste", handlePaste);
 
     return () => {
@@ -366,6 +386,7 @@ export function ExamTakingPage() {
       document.removeEventListener("msfullscreenchange", handleFullscreenChange);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("copy", handleCopy);
+      window.removeEventListener("cut", handleCopy);
       window.removeEventListener("paste", handlePaste);
     };
   }, [proctoringEnabled, proctoringSessionId, attemptId]);

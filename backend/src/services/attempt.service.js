@@ -99,7 +99,7 @@ const submitAttempt = async (attemptId, submissionType = "Submitted") => {
     }
 
     // 7. Update attempt
-    const finalScore = (submissionType === "Disqualified" || submissionType === "Auto Submitted") && submissionType === "Disqualified" ? 0 : totalScore;
+    const finalScore = submissionType === "Disqualified" ? 0 : totalScore;
     attempt.score = finalScore;
     attempt.obtainedMarks = finalScore;
     attempt.status = submissionType;

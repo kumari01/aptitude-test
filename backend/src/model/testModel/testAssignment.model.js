@@ -11,9 +11,12 @@ const testAssignmentSchema = new mongoose.Schema({
         ref: "TestSchedule",
         required: true
     },
+    rollno: {
+        type: String,
+        trim: true
+    },
     rollNumber: {
         type: String,
-        required: true,
         trim: true
     },
     attemptLimit: {
@@ -26,7 +29,8 @@ const testAssignmentSchema = new mongoose.Schema({
         default: "Assigned"
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    strict: false
 });
 
 module.exports = mongoose.model("TestAssignment", testAssignmentSchema);

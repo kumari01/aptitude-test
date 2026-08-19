@@ -41,6 +41,20 @@ const generateLeaderboard = async (examId) => {
 
         const leaderboardData = [];
 
+        let totalMarks = exam.totalMarks || 0;
+        if (!totalMarks || totalMarks <= 0) {
+            const Question = require("../model/question.model");
+            const qList = await Question.find({ $or: [{ testId: examId }, { exam_id: examId }] });
+            if (qList.length > 0) {
+                totalMarks = qList.reduce((sum, q) => sum + (q.marks || 1), 0);
+                try {
+                    await Exam.findByIdAndUpdate(examId, { totalMarks });
+                } catch (e) {}
+            } else {
+                totalMarks = Math.max(100, attempts.reduce((max, a) => Math.max(max, a.score || 0), 0));
+            }
+        }
+
         for (let i = 0; i < attempts.length; i++) {
             const attempt = attempts[i];
 
@@ -48,12 +62,9 @@ const generateLeaderboard = async (examId) => {
                 currentRank = i + 1;
             }
 
-            const percentage =
-                exam.totalMarks > 0
-                    ? Number(
-                        ((attempt.score / exam.totalMarks) * 100).toFixed(2)
-                    )
-                    : 0;
+            const percentage = Number(
+                Math.min(100, Math.max(0, (attempt.score / totalMarks) * 100)).toFixed(2)
+            );
 
             // Update rank in leaderboard
             const leaderboardEntry =

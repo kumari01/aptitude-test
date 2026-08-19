@@ -2,10 +2,14 @@ const mongoose = require("mongoose");
 
 const leaderboardSchema = new mongoose.Schema(
     {
+        testId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Test"
+        },
+
         exam_id: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Test",
-            required: true
+            ref: "Test"
         },
 
         attempt_id: {
@@ -39,13 +43,18 @@ const leaderboardSchema = new mongoose.Schema(
         }
     },
     {
-        timestamps: true
+        timestamps: true,
+        strict: false
     }
 );
 
 // Quickly get leaderboard for an exam
 leaderboardSchema.index({
     exam_id: 1,
+    rank: 1
+});
+leaderboardSchema.index({
+    testId: 1,
     rank: 1
 });
 

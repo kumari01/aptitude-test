@@ -81,7 +81,9 @@ export function LoginPage() {
         const payload =
           tab === "Student"
             ? { rollno: roll, password }
-            : { email: roll, adminid: roll, password };
+            : roll.includes("@")
+            ? { email: roll, password }
+            : { adminid: roll, password };
 
         const response = await axios.post(
           `http://localhost:3000/api${endpoint}`,

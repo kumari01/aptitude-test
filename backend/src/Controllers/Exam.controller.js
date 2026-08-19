@@ -44,32 +44,64 @@ const startExam = async (req, res) => {
             });
         }
 
-        // Check for existing attempt by this student for this test
-        const query = {
-            $or: [{ testId: examId }, { exam_id: examId }],
-        };
-        if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
-            query.student_id = studentId;
+        const studentObjId = mongoose.Types.ObjectId.isValid(studentId) ? new mongoose.Types.ObjectId(studentId) : studentId;
+        const examObjId = mongoose.Types.ObjectId.isValid(examId) ? new mongoose.Types.ObjectId(examId) : examId;
+
+        // Check for existing attempt by this student for this test (handling string & ObjectId values)
+        const studentOrList = [{ student_id: studentId }];
+        if (mongoose.Types.ObjectId.isValid(studentId)) {
+            studentOrList.push({ student_id: studentObjId });
         }
 
-        let attempt = await ExamAttempt.findOne(query);
+        const examOrList = [{ testId: examId }, { exam_id: examId }];
+        if (mongoose.Types.ObjectId.isValid(examId)) {
+            examOrList.push({ testId: examObjId }, { exam_id: examObjId });
+        }
 
-        if (!attempt) {
+        let attempt = await ExamAttempt.findOne({
+            $and: [
+                { $or: studentOrList },
+                { $or: examOrList }
+            ]
+        }).sort({ createdAt: -1 });
+
+        const isFinalStatus = attempt && ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status);
+
+        if (isFinalStatus) {
+            const maxAttempts = test.maxAttempts || 1;
+            const completedCount = await ExamAttempt.countDocuments({
+                $and: [
+                    { $or: studentOrList },
+                    { $or: examOrList }
+                ],
+                status: { $in: ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"] }
+            });
+
+            if (completedCount >= maxAttempts) {
+                return res.status(400).json({
+                    message: "Exam has already been submitted and cannot be resumed or retaken.",
+                    attempt
+                });
+            }
+
+            // Create a new attempt if under maxAttempts
             attempt = new ExamAttempt({
-                testId: examId,
-                exam_id: examId,
-                student_id: studentId,
+                testId: examObjId,
+                exam_id: examObjId,
+                student_id: studentObjId,
                 started_at: new Date(),
+                attemptNumber: completedCount + 1,
                 status: "Started"
             });
             await attempt.save();
-        } else {
-            // Update existing attempt document instead of creating duplicate documents
-            attempt.started_at = new Date();
-            attempt.completed_at = null;
-            attempt.status = "Started";
-            attempt.score = 0;
-            attempt.totalMarks = 0;
+        } else if (!attempt) {
+            attempt = new ExamAttempt({
+                testId: examObjId,
+                exam_id: examObjId,
+                student_id: studentObjId,
+                started_at: new Date(),
+                status: "Started"
+            });
             await attempt.save();
         }
 

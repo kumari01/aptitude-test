@@ -117,7 +117,7 @@ const updateTestSettings = async (req, res) => {
         const setting = await TestSetting.findOneAndUpdate(
             { testId },
             { proctoringEnabled, tabSwitchLimit, autoSubmit },
-            { new: true, upsert: true, setDefaultsOnInsert: true }
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
         );
 
         res.status(200).json({
@@ -177,9 +177,9 @@ const scheduleTest = async (req, res) => {
         const assignments = [];
         for (const roll of validRollNumbers) {
             const assignment = await TestAssignment.findOneAndUpdate(
-                { testId, scheduleId: schedule._id, rollNumber: roll },
-                { attemptLimit: test.maxAttempts || 1, status: "Assigned" },
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { testId, scheduleId: schedule._id, $or: [{ rollno: roll }, { rollNumber: roll }] },
+                { testId, scheduleId: schedule._id, rollno: roll, rollNumber: roll, attemptLimit: test.maxAttempts || 1, status: "Assigned" },
+                { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
             );
             assignments.push(assignment);
         }
@@ -343,7 +343,7 @@ const listStudentAssignedTests = async (req, res) => {
             const attempt = await ExamAttempt.findOne({
                 $or: [{ testId: t._id }, { exam_id: t._id }],
                 student_id: student._id
-            });
+            }).sort({ createdAt: -1 });
 
             detailedTests.push({
                 test: t,
@@ -401,7 +401,26 @@ const getAdminAttempts = async (req, res) => {
             .sort({ updatedAt: -1 })
             .limit(100);
 
-        const attemptIds = attempts.map(a => a._id);
+        // Deduplicate attempts per student + test to ensure single consolidated telemetry row per attempt
+        const uniqueMap = new Map();
+        for (const att of attempts) {
+            const studentIdStr = att.student_id?._id?.toString() || att.student_id?.toString() || att.rollNumber || "unknown";
+            const testIdStr = att.testId?._id?.toString() || att.exam_id?.toString() || att.testId?.toString() || "test";
+            const key = `${studentIdStr}_${testIdStr}`;
+
+            if (!uniqueMap.has(key)) {
+                uniqueMap.set(key, att);
+            } else {
+                const existing = uniqueMap.get(key);
+                // Prefer submitted/auto-submitted/disqualified over started, or newer updated
+                if (existing.status === "Started" && att.status !== "Started") {
+                    uniqueMap.set(key, att);
+                }
+            }
+        }
+
+        const consolidatedAttempts = Array.from(uniqueMap.values());
+        const attemptIds = consolidatedAttempts.map(a => a._id);
 
         // Fetch proctoring sessions for these attempts
         const sessions = await ProctoringSession.find({
@@ -436,7 +455,7 @@ const getAdminAttempts = async (req, res) => {
         const eventCountMap = new Map();
         eventCounts.forEach(e => eventCountMap.set(e._id.toString(), e));
 
-        const formatted = attempts.map(att => {
+        const formatted = consolidatedAttempts.map(att => {
             const student = att.student_id;
             const test = att.testId;
             const session = sessionMap.get(att._id.toString());

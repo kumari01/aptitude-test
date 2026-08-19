@@ -265,8 +265,25 @@ const getStudentProgress = async (req, res) => {
         testObj = await Test.findById(targetTestId);
       }
 
-      const totalMarks = testObj?.totalMarks || 10;
-      const pctValue = totalMarks > 0 ? Math.round((att.score / totalMarks) * 100) : 0;
+      let totalMarks = testObj?.totalMarks || 0;
+      if (!totalMarks || totalMarks <= 0) {
+        if (targetTestId) {
+          const Question = require("../model/question.model");
+          const qList = await Question.find({ $or: [{ testId: targetTestId }, { exam_id: targetTestId }] });
+          if (qList.length > 0) {
+            totalMarks = qList.reduce((sum, q) => sum + (q.marks || 1), 0);
+            try {
+              await Test.findByIdAndUpdate(targetTestId, { totalMarks });
+            } catch (e) {}
+          }
+        }
+      }
+
+      if (!totalMarks || totalMarks <= 0) {
+        totalMarks = Math.max(att.score, 100);
+      }
+
+      const pctValue = Math.min(100, Math.max(0, Math.round((att.score / totalMarks) * 100)));
       
       totalPct += pctValue;
       if (pctValue > bestPct) bestPct = pctValue;
