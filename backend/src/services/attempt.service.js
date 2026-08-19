@@ -51,15 +51,15 @@ const submitAttempt = async (attemptId, submissionType = "Submitted") => {
         }
     }
 
-    if (questions.length === 0 && answers.length > 0) {
-        const answeredQIds = answers.map(a => a.question_id).filter(Boolean);
-        questions = await Question.find({ _id: { $in: answeredQIds } });
-    }
-
     // 5. Get student's answers
     const answers = await StudentAnswer.find({
         attempt_id: attemptId
     });
+
+    if (questions.length === 0 && answers.length > 0) {
+        const answeredQIds = answers.map(a => a.question_id).filter(Boolean);
+        questions = await Question.find({ _id: { $in: answeredQIds } });
+    }
 
     let totalScore = 0;
     let totalPossibleMarks = 0;
@@ -99,7 +99,9 @@ const submitAttempt = async (attemptId, submissionType = "Submitted") => {
     }
 
     // 7. Update attempt
-    attempt.score = totalScore;
+    const finalScore = (submissionType === "Disqualified" || submissionType === "Auto Submitted") && submissionType === "Disqualified" ? 0 : totalScore;
+    attempt.score = finalScore;
+    attempt.obtainedMarks = finalScore;
     attempt.status = submissionType;
     attempt.submitted_at = new Date();
 
@@ -107,7 +109,7 @@ const submitAttempt = async (attemptId, submissionType = "Submitted") => {
 
     return {
         attempt,
-        score: totalScore,
+        score: finalScore,
         totalMarks: totalPossibleMarks
     };
 };

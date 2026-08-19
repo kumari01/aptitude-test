@@ -181,11 +181,23 @@ export function AdminDashboardPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5">
-                        <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${
-                          att.tabSwitches > 0 ? "bg-red-50 text-red-700 border border-red-100" : "bg-gray-100 text-gray-600"
-                        }`}>
-                          {att.tabSwitches} switches
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold w-fit ${
+                            (att.violations > 0 || att.tabSwitches > 0)
+                              ? "bg-red-50 text-red-700 border border-red-100"
+                              : "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                          }`}>
+                            <ShieldAlert size={12} className={(att.violations > 0 || att.tabSwitches > 0) ? "text-red-600" : "text-emerald-600"} />
+                            {(att.violations !== undefined && att.violations !== null && att.violations > 0)
+                              ? `${att.violations} violation${att.violations > 1 ? "s" : ""}`
+                              : (att.tabSwitches > 0 ? `${att.tabSwitches} switches` : "0 violations (Clean)")}
+                          </span>
+                          {att.riskScore > 0 && (
+                            <span className="text-[10px] text-amber-600 font-semibold">
+                              Risk: {att.riskScore}%
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${
@@ -193,9 +205,11 @@ export function AdminDashboardPage() {
                             ? "bg-red-100 text-red-700"
                             : att.status === "Time Expired"
                             ? "bg-amber-100 text-amber-800"
+                            : att.status === "Started"
+                            ? "bg-blue-100 text-blue-700"
                             : "bg-emerald-100 text-emerald-800"
                         }`}>
-                          {att.status}
+                          {att.status || "Submitted"}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right text-xs text-gray-400 font-medium">

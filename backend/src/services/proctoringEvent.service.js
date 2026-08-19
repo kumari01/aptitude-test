@@ -68,6 +68,13 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
             }
         );
 
+        // Synchronize tab_switches on ExamAttempt
+        if (updatedSession.attemptId) {
+            await ExamAttempt.findByIdAndUpdate(updatedSession.attemptId, {
+                $inc: { tab_switches: 1 }
+            });
+        }
+
         // 3rd TAB_SWITCH = automatic submission
         if (updatedSession.tabSwitchCount >= 3) {
 
@@ -86,6 +93,7 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
                 if (
                     attempt.status === "Submitted" ||
                     attempt.status === "Auto Submitted" ||
+                    attempt.status === "Disqualified" ||
                     attempt.status === "Time Expired"
                 ) {
                     throw new Error("Attempt has already been submitted or auto-submitted");
@@ -122,6 +130,13 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
         if (updatedSession.riskScore > 100) {
             updatedSession.riskScore = 100;
             await updatedSession.save();
+        }
+
+        // Increment tab_switches on attempt for window blur or fullscreen exit
+        if (updatedSession.attemptId && (eventType === "FULLSCREEN_EXIT" || eventType === "WINDOW_BLUR")) {
+            await ExamAttempt.findByIdAndUpdate(updatedSession.attemptId, {
+                $inc: { tab_switches: 1 }
+            });
         }
     }
 

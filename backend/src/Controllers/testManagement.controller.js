@@ -8,6 +8,8 @@ const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
 const Question = require("../model/question.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
 const { Student } = require("../model/user.model");
+const ProctoringSession = require("../model/proctoring/proctoringSession");
+const ProctoringEvent = require("../model/proctoring/proctoringEvent");
 
 // Create a new test with settings & target group
 const createTest = async (req, res) => {
@@ -371,8 +373,8 @@ const getAdminOverview = async (req, res) => {
         const publishedExams = await Test.countDocuments({ status: "Published" });
         const draftExams = await Test.countDocuments({ status: "Draft" });
         const totalSchedules = await TestSchedule.countDocuments();
-        const totalAttempts = await ExamAttempt.countDocuments({ status: { $in: ["Submitted", "Completed", "Auto Submitted"] } });
-        const disqualifiedAttempts = await ExamAttempt.countDocuments({ status: "Auto Submitted" });
+        const totalAttempts = await ExamAttempt.countDocuments({ status: { $in: ["Submitted", "Completed", "Auto Submitted", "Disqualified"] } });
+        const disqualifiedAttempts = await ExamAttempt.countDocuments({ status: { $in: ["Auto Submitted", "Disqualified"] } });
         const totalStudents = await Student.countDocuments();
 
         res.status(200).json({
@@ -399,9 +401,61 @@ const getAdminAttempts = async (req, res) => {
             .sort({ updatedAt: -1 })
             .limit(100);
 
+        const attemptIds = attempts.map(a => a._id);
+
+        // Fetch proctoring sessions for these attempts
+        const sessions = await ProctoringSession.find({
+            attemptId: { $in: attemptIds }
+        });
+        const sessionMap = new Map();
+        sessions.forEach(s => {
+            if (s.attemptId) sessionMap.set(s.attemptId.toString(), s);
+        });
+
+        const sessionIds = sessions.map(s => s._id);
+        const eventCounts = await ProctoringEvent.aggregate([
+            { $match: { sessionId: { $in: sessionIds } } },
+            { 
+                $group: { 
+                    _id: "$sessionId", 
+                    totalEvents: { $sum: 1 }, 
+                    types: { $push: "$eventType" },
+                    tabSwitches: { 
+                        $sum: { 
+                            $cond: [{ $eq: ["$eventType", "TAB_SWITCH"] }, 1, 0] 
+                        } 
+                    },
+                    fullscreenExits: {
+                        $sum: {
+                            $cond: [{ $eq: ["$eventType", "FULLSCREEN_EXIT"] }, 1, 0]
+                        }
+                    }
+                } 
+            }
+        ]);
+        const eventCountMap = new Map();
+        eventCounts.forEach(e => eventCountMap.set(e._id.toString(), e));
+
         const formatted = attempts.map(att => {
             const student = att.student_id;
             const test = att.testId;
+            const session = sessionMap.get(att._id.toString());
+            const eventStats = session ? eventCountMap.get(session._id.toString()) : null;
+
+            // Compute total violations & switches from proctoring session and events
+            const sessionSwitches = session?.tabSwitchCount ?? 0;
+            const eventSwitches = eventStats?.tabSwitches ?? 0;
+            const calculatedSwitches = Math.max(att.tab_switches || 0, sessionSwitches, eventSwitches);
+            
+            const totalViolations = eventStats?.totalEvents ?? calculatedSwitches;
+            const riskScore = session?.riskScore ?? (calculatedSwitches > 0 ? Math.min(100, calculatedSwitches * 25) : 0);
+
+            // Determine effective status
+            let effectiveStatus = att.status || "Submitted";
+            if (session?.status === "TERMINATED" && (effectiveStatus === "Started" || effectiveStatus === "Submitted")) {
+                effectiveStatus = "Disqualified";
+            }
+
             return {
                 id: att._id,
                 studentName: student?.username || student?.name || "Student",
@@ -412,8 +466,10 @@ const getAdminAttempts = async (req, res) => {
                 score: att.score || 0,
                 obtainedMarks: att.obtainedMarks || 0,
                 totalMarks: test?.totalMarks || 0,
-                tabSwitches: att.tab_switches || 0,
-                status: att.status || "Submitted",
+                tabSwitches: calculatedSwitches,
+                violations: totalViolations,
+                riskScore: riskScore,
+                status: effectiveStatus,
                 date: att.submitted_at || att.updatedAt || att.started_at
             };
         });

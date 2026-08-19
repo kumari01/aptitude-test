@@ -243,10 +243,75 @@ const terminateSessionByAdmin = async (req, res) => {
   }
 };
 
+// Student/System: Disqualify session due to proctoring violations (e.g. fullscreen exit timeout, tab switch limit)
+const disqualifySession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { reason, attemptId } = req.body;
+    const mongoose = require("mongoose");
+    const { submitAttempt } = require("../services/attempt.service");
+
+    let session = null;
+    if (sessionId && sessionId !== "undefined" && sessionId !== "null" && mongoose.Types.ObjectId.isValid(sessionId)) {
+      session = await ProctoringSession.findById(sessionId);
+    }
+
+    if (!session && attemptId && mongoose.Types.ObjectId.isValid(attemptId)) {
+      session = await ProctoringSession.findOne({ attemptId });
+    }
+
+    const targetAttemptId = attemptId || session?.attemptId;
+    if (!targetAttemptId) {
+      return res.status(404).json({ success: false, message: "Attempt ID or session not found" });
+    }
+
+    const attempt = await ExamAttempt.findById(targetAttemptId);
+    if (!attempt) {
+      return res.status(404).json({ success: false, message: "Attempt not found" });
+    }
+
+    // Verify student owns this attempt or is admin
+    const currentUserId = req.user?.id || req.user?._id;
+    if (attempt.student_id.toString() !== currentUserId?.toString() && req.user?.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not own this attempt" });
+    }
+
+    // Terminate proctoring session
+    if (session) {
+      session.status = "TERMINATED";
+      session.endedAt = new Date();
+      await session.save();
+    }
+
+    // Auto-submit / disqualify attempt
+    try {
+      await submitAttempt(targetAttemptId, "Disqualified");
+    } catch (err) {
+      // If already submitted/completed, force update status to Disqualified
+      await ExamAttempt.findByIdAndUpdate(targetAttemptId, {
+        status: "Disqualified",
+        score: 0,
+        obtainedMarks: 0,
+        submitted_at: new Date()
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Attempt successfully disqualified and submitted",
+      reason: reason || "Proctoring violation limit exceeded",
+    });
+  } catch (error) {
+    console.error("Error disqualifying session:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createSession,
   getSession,
   endSession,
   getLiveSessionsForTest,
   terminateSessionByAdmin,
+  disqualifySession,
 };

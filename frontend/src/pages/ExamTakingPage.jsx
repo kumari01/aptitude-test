@@ -35,6 +35,7 @@ export function ExamTakingPage() {
   const questionsRef = useRef(questions);
   const examRef = useRef(exam);
   const submittingRef = useRef(submitting);
+  const attemptIdRef = useRef(attemptId);
   const proctoringSessionIdRef = useRef(proctoringSessionId);
   const tabSwitchLimitRef = useRef(tabSwitchLimit);
   const warningModalRef = useRef(warningModal);
@@ -43,20 +44,41 @@ export function ExamTakingPage() {
   useEffect(() => { questionsRef.current = questions; }, [questions]);
   useEffect(() => { examRef.current = exam; }, [exam]);
   useEffect(() => { submittingRef.current = submitting; }, [submitting]);
+  useEffect(() => { attemptIdRef.current = attemptId; }, [attemptId]);
   useEffect(() => { proctoringSessionIdRef.current = proctoringSessionId; }, [proctoringSessionId]);
   useEffect(() => { tabSwitchLimitRef.current = tabSwitchLimit; }, [tabSwitchLimit]);
   useEffect(() => { warningModalRef.current = warningModal; }, [warningModal]);
 
   // Trigger immediate disqualification and auto-submission
-  const triggerDisqualification = (reason) => {
+  const triggerDisqualification = async (reason) => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (modalTimerRef.current) clearInterval(modalTimerRef.current);
     setSubmitting(true);
     setWarningModal(null);
 
+    const sId = proctoringSessionIdRef.current;
+    const currAttemptId = attemptIdRef.current || attemptId;
+
+    if (sId) {
+      try {
+        await api.post(`/v1/proctoring/sessions/${sId}/disqualify`, {
+          reason: reason || "Proctoring violation limit exceeded",
+          attemptId: currAttemptId,
+        });
+      } catch (err) {
+        console.warn("Failed to notify backend of disqualification:", err);
+      }
+    } else if (currAttemptId) {
+      try {
+        await api.post("/answers/submit", { attemptId: currAttemptId });
+      } catch (err) {
+        console.warn("Fallback submit error:", err);
+      }
+    }
+
     navigate(`/exams/${examId}/result`, {
       state: {
-        attemptId,
+        attemptId: currAttemptId,
         correct: 0,
         total: questionsRef.current.length,
         answeredCount: Object.keys(answersRef.current).length,

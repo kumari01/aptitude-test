@@ -227,10 +227,10 @@ const getStudentProgress = async (req, res) => {
   try {
     const studentId = req.user.id;
 
-    // Fetch all completed/submitted/auto-submitted attempts for this student
+    // Fetch all completed/submitted/auto-submitted/disqualified attempts for this student
     const attempts = await ExamAttempt.find({
       student_id: studentId,
-      status: { $in: ["Submitted", "Auto Submitted", "Completed"] },
+      status: { $in: ["Submitted", "Auto Submitted", "Completed", "Disqualified"] },
     }).sort({ submitted_at: -1, createdAt: -1 });
 
     const totalAttempts = attempts.length;
@@ -271,7 +271,7 @@ const getStudentProgress = async (req, res) => {
       totalPct += pctValue;
       if (pctValue > bestPct) bestPct = pctValue;
 
-      const isDisqualified = att.status === "Auto Submitted";
+      const isDisqualified = att.status === "Auto Submitted" || att.status === "Disqualified";
       const isPassed = !isDisqualified && pctValue >= 40;
       if (isPassed) passedCount++;
 

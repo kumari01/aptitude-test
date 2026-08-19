@@ -6,6 +6,7 @@ const {
   endSession,
   getLiveSessionsForTest,
   terminateSessionByAdmin,
+  disqualifySession,
 } = require("../Controllers/proctoringSession.controller");
 const authenticate = require("../Middleware/auth.middleware");
 const requireAdmin = require("../Middleware/admin.middleware");
@@ -18,7 +19,7 @@ router.get("/sessions/live/:testId", authenticate, requireAdmin, getLiveSessions
 router.post("/sessions/admin/terminate", authenticate, requireAdmin, terminateSessionByAdmin);
 
 router.get("/sessions/:sessionId", authenticate, getSession);
-
+router.post("/sessions/:sessionId/disqualify", authenticate, disqualifySession);
 router.post("/sessions/:sessionId/end", authenticate, endSession);
 
 module.exports = router;
