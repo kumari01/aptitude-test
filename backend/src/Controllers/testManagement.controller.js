@@ -397,7 +397,8 @@ const getAdminAttempts = async (req, res) => {
     try {
         const attempts = await ExamAttempt.find()
             .populate("testId", "title testType durationMinutes totalMarks")
-            .populate("student_id", "username name rollno department email")
+            .populate("exam_id", "title testType durationMinutes totalMarks")
+            .populate("student_id", "username name rollno rollNumber department email")
             .sort({ updatedAt: -1 })
             .limit(100);
 
@@ -405,7 +406,7 @@ const getAdminAttempts = async (req, res) => {
         const uniqueMap = new Map();
         for (const att of attempts) {
             const studentIdStr = att.student_id?._id?.toString() || att.student_id?.toString() || att.rollNumber || "unknown";
-            const testIdStr = att.testId?._id?.toString() || att.exam_id?.toString() || att.testId?.toString() || "test";
+            const testIdStr = att.testId?._id?.toString() || att.exam_id?._id?.toString() || att.exam_id?.toString() || att.testId?.toString() || "test";
             const key = `${studentIdStr}_${testIdStr}`;
 
             if (!uniqueMap.has(key)) {
@@ -421,6 +422,39 @@ const getAdminAttempts = async (req, res) => {
 
         const consolidatedAttempts = Array.from(uniqueMap.values());
         const attemptIds = consolidatedAttempts.map(a => a._id);
+
+        // Prefetch any missing tests and questions for accurate totalMarks
+        const allTestIds = [...new Set(consolidatedAttempts.map(a => 
+            (a.testId?._id || a.testId || a.exam_id?._id || a.exam_id)?.toString()
+        ).filter(Boolean))];
+
+        const testDocs = await Test.find({ _id: { $in: allTestIds } });
+        const testMap = new Map(testDocs.map(t => [t._id.toString(), t]));
+
+        // Calculate total marks per test by aggregating question marks
+        const questionsList = await Question.find({
+            $or: [
+                { testId: { $in: allTestIds } },
+                { exam_id: { $in: allTestIds } }
+            ]
+        });
+
+        const testMarksMap = new Map();
+        questionsList.forEach(q => {
+            const tId = (q.testId || q.exam_id)?.toString();
+            if (tId) {
+                const currentSum = testMarksMap.get(tId) || 0;
+                testMarksMap.set(tId, currentSum + (q.marks || 1));
+            }
+        });
+
+        // Prefetch any missing students
+        const allStudentIds = [...new Set(consolidatedAttempts.map(a => 
+            (a.student_id?._id || a.student_id)?.toString()
+        ).filter(Boolean))];
+
+        const studentDocs = await Student.find({ _id: { $in: allStudentIds } });
+        const studentMap = new Map(studentDocs.map(s => [s._id.toString(), s]));
 
         // Fetch proctoring sessions for these attempts
         const sessions = await ProctoringSession.find({
@@ -456,8 +490,11 @@ const getAdminAttempts = async (req, res) => {
         eventCounts.forEach(e => eventCountMap.set(e._id.toString(), e));
 
         const formatted = consolidatedAttempts.map(att => {
-            const student = att.student_id;
-            const test = att.testId;
+            const targetTestId = (att.testId?._id || att.testId || att.exam_id?._id || att.exam_id)?.toString();
+            const testObj = (att.testId && att.testId.title) ? att.testId : ((att.exam_id && att.exam_id.title) ? att.exam_id : (targetTestId ? testMap.get(targetTestId) : null));
+
+            const studentObj = (att.student_id && (att.student_id.username || att.student_id.name)) ? att.student_id : (att.student_id ? studentMap.get(att.student_id.toString()) : null);
+
             const session = sessionMap.get(att._id.toString());
             const eventStats = session ? eventCountMap.get(session._id.toString()) : null;
 
@@ -475,20 +512,39 @@ const getAdminAttempts = async (req, res) => {
                 effectiveStatus = "Disqualified";
             }
 
-            const obtained = att.score || att.obtainedMarks || 0;
-            const total = test?.totalMarks || 10;
-            const pct = total > 0 ? Math.round((obtained / total) * 100) : 0;
+            // Calculate total marks for test
+            let totalMarks = testObj?.totalMarks || (targetTestId ? testMarksMap.get(targetTestId) : 0) || 0;
+            if (!totalMarks || totalMarks <= 0) {
+                totalMarks = 10;
+            }
+
+            const isStarted = effectiveStatus === "Started";
+            const isDisqualified = effectiveStatus === "Disqualified";
+
+            let obtainedMarks = 0;
+            let percentage = 0;
+
+            if (isDisqualified) {
+                obtainedMarks = 0;
+                percentage = 0;
+            } else if (!isStarted) {
+                obtainedMarks = typeof att.obtainedMarks === "number"
+                    ? att.obtainedMarks
+                    : (typeof att.score === "number" ? att.score : 0);
+                percentage = totalMarks > 0 ? Math.min(100, Math.max(0, Math.round((obtainedMarks / totalMarks) * 100))) : 0;
+            }
 
             return {
                 id: att._id,
-                studentName: student?.username || student?.name || "Student",
-                rollNumber: att.rollNumber || student?.rollno || "N/A",
-                department: student?.department || "General",
-                testTitle: test?.title || "Assessment",
-                testType: test?.testType || "Aptitude",
-                score: pct,
-                obtainedMarks: obtained,
-                totalMarks: total,
+                studentName: studentObj?.username || studentObj?.name || "Student",
+                rollNumber: att.rollNumber || studentObj?.rollno || studentObj?.rollNumber || "N/A",
+                department: studentObj?.department || "General",
+                testTitle: testObj?.title || "Assessment",
+                testType: testObj?.testType || "Aptitude",
+                score: percentage,
+                percentage: percentage,
+                obtainedMarks: obtainedMarks,
+                totalMarks: totalMarks,
                 tabSwitches: calculatedSwitches,
                 violations: totalViolations,
                 riskScore: riskScore,

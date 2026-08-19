@@ -173,12 +173,34 @@ export function AdminDashboardPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="font-bold text-gray-900 text-xs">
-                          {att.obtainedMarks} / {att.totalMarks || 10} Marks
-                        </div>
-                        <div className="text-[11px] font-semibold text-emerald-700">
-                          {att.score}% Score
-                        </div>
+                        {att.status === "Started" ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 w-fit">
+                              <Clock size={11} className="animate-spin text-blue-600" /> In Progress
+                            </span>
+                            <span className="text-[10px] text-gray-400">Total: {att.totalMarks || 10} Marks</span>
+                          </div>
+                        ) : att.status === "Disqualified" || att.status === "Auto Submitted" ? (
+                          <div>
+                            <div className="font-bold text-red-700 text-xs">
+                              0 / {att.totalMarks || 10} Marks
+                            </div>
+                            <div className="text-[11px] font-bold text-red-600 mt-0.5">
+                              0% (Disqualified)
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="font-bold text-gray-900 text-xs">
+                              {att.obtainedMarks ?? 0} / {att.totalMarks || 10} Marks
+                            </div>
+                            <div className={`text-[11px] font-bold mt-0.5 ${
+                              (att.score ?? 0) >= 40 ? "text-emerald-700" : "text-amber-700"
+                            }`}>
+                              {att.score ?? 0}% Score ({(att.score ?? 0) >= 40 ? "Passed" : "Failed"})
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex flex-col gap-1">
@@ -209,7 +231,7 @@ export function AdminDashboardPage() {
                             ? "bg-blue-100 text-blue-700"
                             : "bg-emerald-100 text-emerald-800"
                         }`}>
-                          {att.status || "Submitted"}
+                          {att.status === "Started" ? "In Progress" : (att.status || "Submitted")}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right text-xs text-gray-400 font-medium">
