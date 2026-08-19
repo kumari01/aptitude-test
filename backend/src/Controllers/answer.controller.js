@@ -34,7 +34,7 @@ const saveStudentAnswer = async (req, res) => {
         }
 
         // Check if attempt is active
-        if (attempt.status === 'Submitted' || attempt.status === 'Time Expired') {
+        if (["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status)) {
             return res.status(400).json({
                 message: 'Attempt is not active'
             });
@@ -118,7 +118,7 @@ const getStudentAnswers = async (req, res) => {
 // Submit exam attempt, grade all answers, and set final score
 const submitExam = async (req, res) => {
     try {
-        const { attemptId } = req.body;
+        const { attemptId, submissionType } = req.body;
 
         if (!attemptId) {
             return res.status(400).json({
@@ -140,7 +140,7 @@ const submitExam = async (req, res) => {
 
         const result = await submitAttempt(
             attemptId,
-            "Submitted"
+            submissionType || "Submitted"
         );
 
         // Update leaderboard after successful submission

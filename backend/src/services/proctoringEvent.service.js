@@ -74,8 +74,25 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
             });
         }
 
-        // 3rd TAB_SWITCH = automatic submission
-        if (updatedSession.tabSwitchCount >= 3) {
+        // TAB_SWITCH limit check -> automatic submission
+        let limit = 3;
+        if (updatedSession.attemptId) {
+            try {
+                const attemptDoc = await ExamAttempt.findById(updatedSession.attemptId);
+                if (attemptDoc) {
+                    const targetTestId = attemptDoc.testId || attemptDoc.exam_id;
+                    const TestSetting = require("../model/testModel/testSetting.model");
+                    const setting = await TestSetting.findOne({ testId: targetTestId });
+                    if (setting?.tabSwitchLimit) {
+                        limit = setting.tabSwitchLimit;
+                    }
+                }
+            } catch (err) {
+                console.warn("Could not fetch test setting for limit check:", err);
+            }
+        }
+
+        if (updatedSession.tabSwitchCount >= limit) {
 
             if (!updatedSession.attemptId) {
                 throw new Error(
@@ -92,16 +109,17 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
                 if (
                     attempt.status === "Submitted" ||
                     attempt.status === "Auto Submitted" ||
-                    attempt.status === "Time Expired"
+                    attempt.status === "Time Expired" ||
+                    attempt.status === "Disqualified"
                 ) {
                     throw new Error("Attempt has already been submitted or auto-submitted");
                 }
             }
 
-            // 7. Automatically submit the attempt using shared submission service
+            // Automatically submit the attempt using shared submission service
             await submitAttempt(updatedSession.attemptId, "Auto Submitted");
 
-            // 8. Terminate proctoring session
+            // Terminate proctoring session
             updatedSession.status = "TERMINATED";
 
             await updatedSession.save();

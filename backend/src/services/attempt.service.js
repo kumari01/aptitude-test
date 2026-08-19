@@ -51,15 +51,15 @@ const submitAttempt = async (attemptId, submissionType = "Submitted") => {
         }
     }
 
-    if (questions.length === 0 && answers.length > 0) {
-        const answeredQIds = answers.map(a => a.question_id).filter(Boolean);
-        questions = await Question.find({ _id: { $in: answeredQIds } });
-    }
-
     // 5. Get student's answers
     const answers = await StudentAnswer.find({
         attempt_id: attemptId
     });
+
+    if (questions.length === 0 && answers.length > 0) {
+        const answeredQIds = answers.map(a => a.question_id).filter(Boolean);
+        questions = await Question.find({ _id: { $in: answeredQIds } });
+    }
 
     let totalScore = 0;
     let totalPossibleMarks = 0;

@@ -342,7 +342,7 @@ const listStudentAssignedTests = async (req, res) => {
             const attempt = await ExamAttempt.findOne({
                 $or: [{ testId: t._id }, { exam_id: t._id }],
                 student_id: student._id
-            });
+            }).sort({ createdAt: -1 });
 
             detailedTests.push({
                 test: t,

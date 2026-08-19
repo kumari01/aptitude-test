@@ -47,16 +47,36 @@ export function ExamTakingPage() {
   useEffect(() => { tabSwitchLimitRef.current = tabSwitchLimit; }, [tabSwitchLimit]);
   useEffect(() => { warningModalRef.current = warningModal; }, [warningModal]);
 
+  const attemptIdRef = useRef(attemptId);
+  useEffect(() => { attemptIdRef.current = attemptId; }, [attemptId]);
+
   // Trigger immediate disqualification and auto-submission
-  const triggerDisqualification = (reason) => {
+  const triggerDisqualification = async (reason) => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (modalTimerRef.current) clearInterval(modalTimerRef.current);
     setSubmitting(true);
     setWarningModal(null);
 
+    const activeAttemptId = attemptId || attemptIdRef.current;
+    if (activeAttemptId) {
+      try {
+        await api.post("/answers/submit", { attemptId: activeAttemptId, submissionType: "Auto Submitted" });
+      } catch (err) {
+        console.warn("Backend submit on disqualification failed:", err);
+      }
+    }
+
+    if (proctoringSessionIdRef.current) {
+      try {
+        await api.post(`/v1/proctoring/sessions/${proctoringSessionIdRef.current}/end`);
+      } catch (err) {
+        console.warn("Failed to end proctoring session on disqualification:", err);
+      }
+    }
+
     navigate(`/exams/${examId}/result`, {
       state: {
-        attemptId,
+        attemptId: activeAttemptId,
         correct: 0,
         total: questionsRef.current.length,
         answeredCount: Object.keys(answersRef.current).length,
@@ -118,6 +138,13 @@ export function ExamTakingPage() {
         const res = await api.post(`/exams/${examId}/start`);
         if (res.data) {
           const { attempt, exam: examData, questions: qData, proctoringSession } = res.data;
+          
+          if (attempt?.status && ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status)) {
+            toast.error("This exam has already been submitted and cannot be resumed.");
+            navigate(`/exams/${examId}/result`, { state: { attemptId: attempt._id, disqualified: attempt.status === "Auto Submitted" || attempt.status === "Disqualified" }, replace: true });
+            return;
+          }
+
           if (attempt?._id) setAttemptId(attempt._id);
           
           if (proctoringSession?._id) {
@@ -188,7 +215,13 @@ export function ExamTakingPage() {
           }
         }
       } catch (err) {
-        console.warn("Using local mock test session fallback:", err);
+        console.warn("Exam start error:", err);
+        const msg = err.response?.data?.message || "Exam cannot be started or resumed.";
+        if (err.response?.status === 400 || err.response?.status === 403) {
+          toast.error(msg);
+          navigate("/dashboard", { replace: true });
+          return;
+        }
       } finally {
         setLoading(false);
       }

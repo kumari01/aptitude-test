@@ -129,9 +129,9 @@ export function DashboardPage() {
             </span>
           </div>
         </div>
-        {liveExam?.attemptStatus === "Submitted" || liveExam?.attemptStatus === "Auto Submitted" || liveExam?.attemptStatus === "Completed" ? (
+        {["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(liveExam?.attemptStatus) ? (
           <button
-            onClick={() => navigate(`/exams/${liveExam.id}/result`, { state: { attemptId: liveExam.attemptId, disqualified: liveExam.attemptStatus === "Auto Submitted" } })}
+            onClick={() => navigate(`/exams/${liveExam.id}/result`, { state: { attemptId: liveExam.attemptId, disqualified: liveExam.attemptStatus === "Auto Submitted" || liveExam.attemptStatus === "Disqualified" } })}
             className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 bg-slate-800"
           >
             View Result <ArrowRight size={16} />

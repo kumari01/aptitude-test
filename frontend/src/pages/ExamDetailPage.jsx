@@ -109,7 +109,7 @@ export function ExamDetailPage() {
     setShowFullscreenPopup(false);
   };
 
-  const isCompleted = attemptInfo?.status === "Submitted" || attemptInfo?.status === "Auto Submitted" || attemptInfo?.status === "Completed";
+  const isCompleted = ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attemptInfo?.status);
   const isStarted = attemptInfo?.status === "Started";
 
   return (
@@ -202,7 +202,7 @@ export function ExamDetailPage() {
 
       {isCompleted ? (
         <button
-          onClick={() => navigate(`/exams/${examId}/result`, { state: { attemptId: attemptInfo._id, disqualified: attemptInfo.status === "Auto Submitted" } })}
+          onClick={() => navigate(`/exams/${examId}/result`, { state: { attemptId: attemptInfo._id, disqualified: attemptInfo.status === "Auto Submitted" || attemptInfo.status === "Disqualified" } })}
           className="flex items-center gap-2 text-white font-semibold px-7 py-3.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm bg-slate-800"
         >
           View Result <ArrowRight size={16} />

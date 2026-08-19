@@ -65,7 +65,36 @@ const startExam = async (req, res) => {
             ]
         }).sort({ createdAt: -1 });
 
-        if (!attempt) {
+        const isFinalStatus = attempt && ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status);
+
+        if (isFinalStatus) {
+            const maxAttempts = test.maxAttempts || 1;
+            const completedCount = await ExamAttempt.countDocuments({
+                $and: [
+                    { $or: studentOrList },
+                    { $or: examOrList }
+                ],
+                status: { $in: ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"] }
+            });
+
+            if (completedCount >= maxAttempts) {
+                return res.status(400).json({
+                    message: "Exam has already been submitted and cannot be resumed or retaken.",
+                    attempt
+                });
+            }
+
+            // Create a new attempt if under maxAttempts
+            attempt = new ExamAttempt({
+                testId: examObjId,
+                exam_id: examObjId,
+                student_id: studentObjId,
+                started_at: new Date(),
+                attemptNumber: completedCount + 1,
+                status: "Started"
+            });
+            await attempt.save();
+        } else if (!attempt) {
             attempt = new ExamAttempt({
                 testId: examObjId,
                 exam_id: examObjId,
@@ -73,15 +102,6 @@ const startExam = async (req, res) => {
                 started_at: new Date(),
                 status: "Started"
             });
-            await attempt.save();
-        } else {
-            // Update existing attempt document in-place instead of creating duplicate documents
-            attempt.started_at = new Date();
-            attempt.submitted_at = null;
-            attempt.status = "Started";
-            attempt.score = 0;
-            attempt.obtainedMarks = 0;
-            attempt.tab_switches = 0;
             await attempt.save();
         }
 
