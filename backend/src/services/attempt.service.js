@@ -84,7 +84,7 @@ const submitAttempt = async (attemptId, submissionType = "Submitted") => {
             question.correct_option_id &&
             studentAnswer.selected_option_id &&
             question.correct_option_id.toString() ===
-                studentAnswer.selected_option_id.toString();
+            studentAnswer.selected_option_id.toString();
 
         studentAnswer.is_correct = isCorrect;
         studentAnswer.marks_awarded = isCorrect
@@ -114,4 +114,4 @@ const submitAttempt = async (attemptId, submissionType = "Submitted") => {
     };
 };
 
-module.exports = {submitAttempt};
+module.exports = { submitAttempt };
