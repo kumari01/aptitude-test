@@ -138,7 +138,7 @@ export function ExamTakingPage() {
         const res = await api.post(`/exams/${examId}/start`);
         if (res.data) {
           const { attempt, exam: examData, questions: qData, proctoringSession } = res.data;
-          
+
           if (attempt?.status && ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status)) {
             toast.error("This exam has already been submitted and cannot be resumed.");
             navigate(`/exams/${examId}/result`, { state: { attemptId: attempt._id, disqualified: attempt.status === "Auto Submitted" || attempt.status === "Disqualified" }, replace: true });
@@ -146,7 +146,7 @@ export function ExamTakingPage() {
           }
 
           if (attempt?._id) setAttemptId(attempt._id);
-          
+
           if (proctoringSession?._id) {
             setProctoringSessionId(proctoringSession._id);
           }
@@ -333,9 +333,9 @@ export function ExamTakingPage() {
 
     const handleFullscreenChange = () => {
       const isFull = document.fullscreenElement ||
-                     document.webkitFullscreenElement ||
-                     document.mozFullScreenElement ||
-                     document.msFullscreenElement;
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement;
       if (!isFull) {
         logProctoringEvent("FULLSCREEN_EXIT");
       }
@@ -345,7 +345,7 @@ export function ExamTakingPage() {
     const handleResize = () => {
       const now = Date.now();
       if (now - lastResizeTime < 1500) return;
-      
+
       const thresholdWidth = screen.width - 60;
       const thresholdHeight = screen.height - 60;
       if (window.outerWidth < thresholdWidth || window.outerHeight < thresholdHeight) {
@@ -357,7 +357,7 @@ export function ExamTakingPage() {
     const handleCopy = (e) => {
       if (e && e.preventDefault) e.preventDefault();
       if (!isFullscreen()) {
-        requestFullscreen().catch(() => {});
+        requestFullscreen().catch(() => { });
       }
     };
 

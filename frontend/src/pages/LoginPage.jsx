@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Hash, Lock, ArrowRight, User, Mail, Shield } from "lucide-react";
+import { Hash, Lock, ArrowRight, User, Mail, Shield, Eye, EyeOff } from "lucide-react";
 import Logo from "../components/common/Logo";
 import GoogleG from "../components/common/GoogleG";
 import { BRAND, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
@@ -17,6 +17,7 @@ export function LoginPage() {
   const [roll, setRoll] = useState("");
   const [adminId, setAdminId] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const resetForm = () => {
     setUsername("");
@@ -306,12 +307,20 @@ export function LoginPage() {
           <div className="mt-1.5 mb-6 flex items-center gap-2 border border-gray-200 rounded-xl px-3.5 py-3 focus-within:border-gray-400">
             <Lock size={16} className="text-gray-400" />
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
               className="w-full outline-none text-gray-800 bg-transparent placeholder:text-gray-400"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="text-gray-400 hover:text-gray-600 focus:outline-none p-1 shrink-0"
+              title={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
 
           <button

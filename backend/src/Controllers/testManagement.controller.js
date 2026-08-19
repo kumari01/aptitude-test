@@ -433,6 +433,10 @@ const getAdminAttempts = async (req, res) => {
             const sessionSwitches = sessionMap.get(att._id.toString()) || 0;
             const finalSwitches = Math.max(att.tab_switches || 0, sessionSwitches);
 
+            const obtained = att.score || att.obtainedMarks || 0;
+            const total = test?.totalMarks || 10;
+            const pct = total > 0 ? Math.round((obtained / total) * 100) : 0;
+
             return {
                 id: att._id,
                 studentName: student?.username || student?.name || "Student",
@@ -440,9 +444,9 @@ const getAdminAttempts = async (req, res) => {
                 department: student?.department || "General",
                 testTitle: test?.title || "Assessment",
                 testType: test?.testType || "Aptitude",
-                score: att.score || 0,
-                obtainedMarks: att.obtainedMarks || 0,
-                totalMarks: test?.totalMarks || 0,
+                score: pct,
+                obtainedMarks: obtained,
+                totalMarks: total,
                 tabSwitches: finalSwitches,
                 status: att.status || "Submitted",
                 date: att.submitted_at || att.updatedAt || att.started_at

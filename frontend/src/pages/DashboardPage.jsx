@@ -44,20 +44,54 @@ export function DashboardPage() {
         if (assignedRes?.data?.tests) {
           setTotalAssignedCount(assignedRes.data.tests.length);
         }
-        // Use the first assigned test for the LIVE banner
+        // Find the most appropriate active, upcoming, or live test for the banner
         if (assignedRes?.data?.tests && assignedRes.data.tests.length > 0) {
-          const first = assignedRes.data.tests[0];
-          const targetExamId = first.test._id;
+          const testsList = assignedRes.data.tests;
+          const now = new Date();
+
+          // 1. Find active & uncompleted test within current schedule window
+          let activeItem = testsList.find((item) => {
+            const isCompleted = item.attempt?.status && ["Submitted", "Auto Submitted", "Time Expired", "Completed"].includes(item.attempt.status);
+            if (isCompleted) return false;
+
+            const startAt = item.schedule?.startAt ? new Date(item.schedule.startAt) : null;
+            const endAt = item.schedule?.endAt ? new Date(item.schedule.endAt) : null;
+            if (startAt && now < startAt) return false;
+            if (endAt && now > endAt) return false;
+            return true;
+          });
+
+          // 2. Or find upcoming uncompleted scheduled test
+          if (!activeItem) {
+            activeItem = testsList.find((item) => {
+              const isCompleted = item.attempt?.status && ["Submitted", "Auto Submitted", "Time Expired", "Completed"].includes(item.attempt.status);
+              if (isCompleted) return false;
+              const startAt = item.schedule?.startAt ? new Date(item.schedule.startAt) : null;
+              return startAt && now < startAt;
+            });
+          }
+
+          // 3. Fallback to any uncompleted test, or first test overall
+          if (!activeItem) {
+            activeItem = testsList.find((item) => !item.attempt?.status || !["Submitted", "Auto Submitted", "Time Expired", "Completed"].includes(item.attempt.status)) || testsList[0];
+          }
+
+          const targetExamId = activeItem.test._id;
+          const startAtDate = activeItem.schedule?.startAt ? new Date(activeItem.schedule.startAt) : null;
+          const isUpcoming = startAtDate ? now < startAtDate : false;
+
           setLiveExam({
             id: targetExamId,
-            title: first.test.title,
-            questions: 10,
-            minutes: 30,
-            due: first.schedule?.endAt
-              ? new Date(first.schedule.endAt).toLocaleDateString()
+            title: activeItem.test.title,
+            questions: activeItem.test.totalQuestions || 10,
+            minutes: activeItem.test.duration_minutes || activeItem.test.durationMinutes || 30,
+            due: activeItem.schedule?.endAt
+              ? new Date(activeItem.schedule.endAt).toLocaleDateString()
               : "Scheduled",
-            attemptStatus: first.attempt?.status,
-            attemptId: first.attempt?._id,
+            startAtFormatted: startAtDate ? startAtDate.toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : null,
+            isUpcoming,
+            attemptStatus: activeItem.attempt?.status,
+            attemptId: activeItem.attempt?._id,
           });
 
           // Fetch leaderboard for this test if available
@@ -99,19 +133,29 @@ export function DashboardPage() {
       </h1>
       <p className="text-gray-500 mt-1 mb-6">Here's your weekly exam status</p>
 
-      {/* LIVE EXAM BANNER */}
+        {/* LIVE EXAM BANNER */}
       <div
         className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-6 relative overflow-hidden shadow-sm"
         style={{ background: INK }}
       >
         <div>
           <div className="flex items-center gap-3 mb-3">
-            <span
-              className="text-[11px] font-bold tracking-wide text-white px-2.5 py-1 rounded-full"
-              style={{ background: BRAND }}
-            >
-              LIVE NOW
-            </span>
+            {liveExam?.isUpcoming ? (
+              <span className="text-[11px] font-bold tracking-wide text-white px-2.5 py-1 rounded-full bg-amber-600">
+                SCHEDULED
+              </span>
+            ) : ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(liveExam?.attemptStatus) ? (
+              <span className="text-[11px] font-bold tracking-wide text-white px-2.5 py-1 rounded-full bg-slate-700">
+                COMPLETED
+              </span>
+            ) : (
+              <span
+                className="text-[11px] font-bold tracking-wide text-white px-2.5 py-1 rounded-full"
+                style={{ background: BRAND }}
+              >
+                LIVE NOW
+              </span>
+            )}
             <span className="text-gray-400 text-sm">This Week's Exam</span>
           </div>
           <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: FONT_DISPLAY }}>
@@ -132,15 +176,22 @@ export function DashboardPage() {
         {["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(liveExam?.attemptStatus) ? (
           <button
             onClick={() => navigate(`/exams/${liveExam.id}/result`, { state: { attemptId: liveExam.attemptId, disqualified: liveExam.attemptStatus === "Auto Submitted" || liveExam.attemptStatus === "Disqualified" } })}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 bg-slate-800"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 bg-slate-800 cursor-pointer"
           >
             View Result <ArrowRight size={16} />
+          </button>
+        ) : liveExam?.isUpcoming ? (
+          <button
+            disabled
+            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white/70 font-semibold px-6 py-3.5 rounded-xl bg-slate-800 cursor-not-allowed shrink-0"
+          >
+            Starts {liveExam.startAtFormatted || "Soon"}
           </button>
         ) : (
           <button
             onClick={() => liveExam && handleStartExam(liveExam.id)}
             disabled={!liveExam}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50 cursor-pointer"
             style={{ background: BRAND }}
           >
             {liveExam?.attemptStatus === "Started" ? "Resume Exam" : "Take Exam"} <ArrowRight size={16} />
