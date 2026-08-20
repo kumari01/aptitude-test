@@ -17,7 +17,9 @@ import {
   Filter, 
   Calendar,
   Layers,
-  Sparkles
+  Sparkles,
+  LayoutGrid,
+  List
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
@@ -33,6 +35,9 @@ export function AdminDashboardPage() {
   
   // Selected Exam for Detailed Drill-Down View (null = Overview Grid)
   const [selectedExamId, setSelectedExamId] = useState(null);
+  
+  // View mode switcher for assessment cards: "grid" (boxes) vs "list" (single row cards)
+  const [viewMode, setViewMode] = useState("grid");
   
   // Search and Filter states
   const [examSearchQuery, setExamSearchQuery] = useState("");
@@ -422,26 +427,61 @@ export function AdminDashboardPage() {
             <p className="text-xs text-gray-500 mt-0.5">Click any exam card to drill down into student submissions and test analytics.</p>
           </div>
 
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm focus-within:border-indigo-500 transition-all w-full sm:w-72">
-            <Search size={14} className="text-gray-400 shrink-0" />
-            <input
-              type="text"
-              placeholder="Search weekly exam..."
-              value={examSearchQuery}
-              onChange={(e) => setExamSearchQuery(e.target.value)}
-              className="w-full bg-transparent text-xs text-gray-800 outline-none font-medium placeholder-gray-400"
-            />
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            {/* Search Input */}
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm focus-within:border-indigo-500 transition-all flex-1 sm:w-64">
+              <Search size={14} className="text-gray-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Search weekly exam..."
+                value={examSearchQuery}
+                onChange={(e) => setExamSearchQuery(e.target.value)}
+                className="w-full bg-transparent text-xs text-gray-800 outline-none font-medium placeholder-gray-400"
+              />
+            </div>
+
+            {/* View Mode Toggle Switch (Boxes vs Single Row Cards) */}
+            <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 shrink-0 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                title="Grid Box View"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-white text-indigo-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                <LayoutGrid size={15} />
+                <span className="hidden md:inline">Boxes</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                title="Single Row Card View"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "list"
+                    ? "bg-white text-indigo-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                <List size={15} />
+                <span className="hidden md:inline">Rows</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Weekly Cards Grid */}
+        {/* Weekly Cards Display (Grid Box View or Single Row Card View) */}
         {filteredTestsList.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200">
             <FileText size={40} className="mx-auto mb-3 text-gray-300" />
             <h4 className="text-base font-bold text-gray-800" style={{ fontFamily: FONT_DISPLAY }}>No examinations found</h4>
             <p className="text-xs text-gray-400 mt-1">Create or publish an exam to observe weekly student performance telemetry.</p>
           </div>
-        ) : (
+        ) : viewMode === "grid" ? (
+          /* ============= 1. GRID BOXES VIEW ============= */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredTestsList.map((item, idx) => {
               const t = item.test || {};
@@ -522,6 +562,92 @@ export function AdminDashboardPage() {
                   <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
                     <span>View Student Telemetry & Insights</span>
                     <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ============= 2. SINGLE ROW CARD VIEW (ONE AFTER ANOTHER) ============= */
+          <div className="flex flex-col gap-3.5">
+            {filteredTestsList.map((item, idx) => {
+              const t = item.test || {};
+              const tId = t._id || t.id || item.id;
+              const schedule = item.schedule || {};
+
+              // Calculate metrics for this card
+              const cardAttempts = attempts.filter(a => {
+                const aId = a.testId?._id || a.testId || a.exam_id?._id || a.exam_id;
+                return aId === tId;
+              });
+
+              const participantCount = cardAttempts.length;
+              const cardPassedCount = cardAttempts.filter(a => (a.score ?? 0) >= 40 && a.status !== "Disqualified" && a.status !== "Auto Submitted").length;
+              const cardPassRate = participantCount > 0 ? Math.round((cardPassedCount / participantCount) * 100) : 0;
+              const cardAvgScore = participantCount > 0 ? Math.round(cardAttempts.reduce((sum, a) => sum + (a.score || 0), 0) / participantCount) : 0;
+              const cardViolations = cardAttempts.filter(a => (a.violations > 0 || a.tabSwitches > 0 || a.status === "Disqualified")).length;
+
+              const isLive = t.status === "Published";
+
+              return (
+                <div
+                  key={tId || idx}
+                  onClick={() => setSelectedExamId(tId)}
+                  className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 group"
+                >
+                  {/* Left: Category, Title & Info */}
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 tracking-wider">
+                        {t.category || t.testType || "APTITUDE"}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isLive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-gray-100 text-gray-600"
+                      }`}>
+                        {isLive ? "● LIVE NOW" : "DRAFT"}
+                      </span>
+                    </div>
+
+                    <h4 className="text-base sm:text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors truncate" style={{ fontFamily: FONT_DISPLAY }}>
+                      {t.title}
+                    </h4>
+
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <FileText size={12} /> {t.totalQuestions || 10} Questions
+                      </span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} /> {t.durationMinutes || 30} mins
+                      </span>
+                      <span>•</span>
+                      <span>Total: {t.totalMarks || 10} marks</span>
+                    </div>
+                  </div>
+
+                  {/* Center: 3 Telemetry Metrics */}
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <div className="bg-gray-50 px-3 py-2 rounded-xl text-center border border-gray-100 min-w-[70px]">
+                      <div className="text-sm font-bold text-gray-900">{participantCount}</div>
+                      <div className="text-[10px] text-gray-400 font-medium">Students</div>
+                    </div>
+
+                    <div className="bg-gray-50 px-3 py-2 rounded-xl text-center border border-gray-100 min-w-[75px]">
+                      <div className="text-sm font-bold text-emerald-600">{cardPassRate}%</div>
+                      <div className="text-[10px] text-gray-400 font-medium">Pass Rate</div>
+                    </div>
+
+                    <div className="bg-gray-50 px-3 py-2 rounded-xl text-center border border-gray-100 min-w-[65px]">
+                      <div className="text-sm font-bold text-red-600">{cardViolations}</div>
+                      <div className="text-[10px] text-gray-400 font-medium">Flagged</div>
+                    </div>
+                  </div>
+
+                  {/* Right: Action Button */}
+                  <div className="flex items-center justify-end md:justify-center shrink-0">
+                    <span className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-800 group-hover:bg-indigo-50 group-hover:text-indigo-700 transition-all">
+                      View Telemetry <ChevronRight size={15} className="group-hover:translate-x-1 transition-transform" />
+                    </span>
                   </div>
                 </div>
               );
