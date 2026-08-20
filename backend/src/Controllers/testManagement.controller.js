@@ -653,11 +653,14 @@ const getAdminAttempts = async (req, res) => {
 
             return {
                 id: att._id,
-                studentName: studentObj?.username || studentObj?.name || "Student",
+                testId: targetTestId,
+                exam_id: targetTestId,
+                studentId: (studentObj?._id || att.student_id?._id || att.student_id)?.toString(),
+                studentName: studentObj?.username || studentObj?.name || att.studentName || "Student",
                 rollNumber: att.rollNumber || studentObj?.rollno || studentObj?.rollNumber || "N/A",
                 department: studentObj?.department || "General",
                 testTitle: testObj?.title || "Assessment",
-                testType: testObj?.testType || "Aptitude",
+                testType: testObj?.category || testObj?.testType || "Aptitude",
                 score: percentage,
                 percentage: percentage,
                 obtainedMarks: obtainedMarks,

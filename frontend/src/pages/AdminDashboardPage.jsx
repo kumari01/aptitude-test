@@ -36,8 +36,8 @@ export function AdminDashboardPage() {
   // Selected Exam for Detailed Drill-Down View (null = Overview Grid)
   const [selectedExamId, setSelectedExamId] = useState(null);
   
-  // View mode switcher for assessment cards: "grid" (boxes) vs "list" (single row cards)
-  const [viewMode, setViewMode] = useState("grid");
+  // View mode switcher for assessment cards: "grid" (boxes) vs "list" (single row cards) - default is "list" (rows)
+  const [viewMode, setViewMode] = useState("list");
   
   // Search and Filter states
   const [examSearchQuery, setExamSearchQuery] = useState("");
@@ -90,16 +90,26 @@ export function AdminDashboardPage() {
     return <AdminDashboardSkeleton />;
   }
 
+  // Safe string ID normalizer
+  const normalizeId = (val) => {
+    if (!val) return "";
+    if (typeof val === "object") {
+      if (val._id) return String(val._id);
+      if (val.id) return String(val.id);
+    }
+    return String(val);
+  };
+
   // Selected Exam Object for Drill-down
   const activeExamItem = selectedExamId
-    ? tests.find((t) => (t.test?._id || t.test?.id || t.id) === selectedExamId)
+    ? tests.find((t) => normalizeId(t.test?._id || t.test?.id || t._id || t.id) === normalizeId(selectedExamId))
     : null;
 
   // Filter attempts for the selected exam
   const examAttempts = selectedExamId
     ? attempts.filter((a) => {
-        const aTestId = a.testId?._id || a.testId || a.exam_id?._id || a.exam_id;
-        return aTestId === selectedExamId;
+        const aTestId = normalizeId(a.testId?._id || a.testId?.id || a.testId || a.exam_id?._id || a.exam_id?.id || a.exam_id);
+        return aTestId === normalizeId(selectedExamId);
       })
     : [];
 
@@ -490,8 +500,8 @@ export function AdminDashboardPage() {
 
               // Calculate metrics for this card
               const cardAttempts = attempts.filter(a => {
-                const aId = a.testId?._id || a.testId || a.exam_id?._id || a.exam_id;
-                return aId === tId;
+                const aId = normalizeId(a.testId?._id || a.testId?.id || a.testId || a.exam_id?._id || a.exam_id?.id || a.exam_id);
+                return aId === normalizeId(tId);
               });
 
               const participantCount = cardAttempts.length;
@@ -577,8 +587,8 @@ export function AdminDashboardPage() {
 
               // Calculate metrics for this card
               const cardAttempts = attempts.filter(a => {
-                const aId = a.testId?._id || a.testId || a.exam_id?._id || a.exam_id;
-                return aId === tId;
+                const aId = normalizeId(a.testId?._id || a.testId?.id || a.testId || a.exam_id?._id || a.exam_id?.id || a.exam_id);
+                return aId === normalizeId(tId);
               });
 
               const participantCount = cardAttempts.length;
