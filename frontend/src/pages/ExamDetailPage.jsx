@@ -5,6 +5,7 @@ import { BRAND, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { requestFullscreen } from "../utils/fullscreen";
+import { ExamDetailSkeleton } from "../components/skeletons";
 
 export function ExamDetailPage() {
   const { examId } = useParams();
@@ -70,9 +71,7 @@ export function ExamDetailPage() {
   }, [examId]);
 
   if (loading) {
-    return (
-      <div className="px-4 sm:px-6 md:px-10 py-6 max-w-4xl mx-auto">Loading exam details...</div>
-    );
+    return <ExamDetailSkeleton />;
   }
 
   if (error) {
