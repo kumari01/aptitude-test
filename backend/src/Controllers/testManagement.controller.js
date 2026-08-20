@@ -385,19 +385,29 @@ const listStudentAssignedTests = async (req, res) => {
         });
         const assignedTestIds = assignments.map(a => a.testId.toString());
 
-        // Also find tests with target "ALL"
-        const allTargets = await TestTarget.find({ targetType: "ALL" });
+        // Also find tests with target "ALL" or "All"
+        const allTargets = await TestTarget.find({ targetType: { $in: ["ALL", "All", "all"] } });
         const allTargetTestIds = allTargets.map(t => t.testId.toString());
 
         let targetedIds = [];
         if (student.department || student.batch) {
-            const matchingTargets = await TestTarget.find({
-                $or: [
+            const orConditions = [];
+            if (student.department) {
+                orConditions.push(
                     { departments: student.department },
-                    { batches: student.batch }
-                ]
-            });
-            targetedIds = matchingTargets.map(t => t.testId.toString());
+                    { departments: new RegExp(`^${student.department.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+                );
+            }
+            if (student.batch) {
+                orConditions.push(
+                    { batches: student.batch },
+                    { batches: new RegExp(`^${student.batch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+                );
+            }
+            if (orConditions.length > 0) {
+                const matchingTargets = await TestTarget.find({ $or: orConditions });
+                targetedIds = matchingTargets.map(t => t.testId.toString());
+            }
         }
 
         let combinedIds = Array.from(new Set([...assignedTestIds, ...allTargetTestIds, ...targetedIds]));
