@@ -58,51 +58,55 @@ const startExam = async (req, res) => {
             examOrList.push({ testId: examObjId }, { exam_id: examObjId });
         }
 
+        // 1. Check for any in-progress attempt first
         let attempt = await ExamAttempt.findOne({
             $and: [
                 { $or: studentOrList },
                 { $or: examOrList }
-            ]
+            ],
+            status: { $in: ["Started", "In Progress"] }
         }).sort({ createdAt: -1 });
 
-        const isFinalStatus = attempt && ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status);
-
-        if (isFinalStatus) {
-            const maxAttempts = test.maxAttempts || 1;
-            const completedCount = await ExamAttempt.countDocuments({
+        if (!attempt) {
+            // 2. Check completed attempts
+            const completedAttempts = await ExamAttempt.find({
                 $and: [
                     { $or: studentOrList },
                     { $or: examOrList }
                 ],
                 status: { $in: ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"] }
-            });
+            }).sort({ createdAt: -1 });
 
-            if (completedCount >= maxAttempts) {
+            const maxAttempts = test.maxAttempts || 1;
+            if (completedAttempts.length >= maxAttempts) {
                 return res.status(400).json({
                     message: "Exam has already been submitted and cannot be resumed or retaken.",
-                    attempt
+                    attempt: completedAttempts[0]
                 });
             }
 
-            // Create a new attempt if under maxAttempts
-            attempt = new ExamAttempt({
-                testId: examObjId,
-                exam_id: examObjId,
-                student_id: studentObjId,
-                started_at: new Date(),
-                attemptNumber: completedCount + 1,
-                status: "Started"
-            });
-            await attempt.save();
-        } else if (!attempt) {
-            attempt = new ExamAttempt({
-                testId: examObjId,
-                exam_id: examObjId,
-                student_id: studentObjId,
-                started_at: new Date(),
-                status: "Started"
-            });
-            await attempt.save();
+            // 3. Concurrency guard: Check if an attempt was created in the last 5 seconds to prevent race duplicates
+            const recentlyCreated = await ExamAttempt.findOne({
+                $and: [
+                    { $or: studentOrList },
+                    { $or: examOrList }
+                ],
+                createdAt: { $gte: new Date(Date.now() - 5000) }
+            }).sort({ createdAt: -1 });
+
+            if (recentlyCreated) {
+                attempt = recentlyCreated;
+            } else {
+                attempt = new ExamAttempt({
+                    testId: examObjId,
+                    exam_id: examObjId,
+                    student_id: studentObjId,
+                    started_at: new Date(),
+                    attemptNumber: completedAttempts.length + 1,
+                    status: "Started"
+                });
+                await attempt.save();
+            }
         }
 
         // Find or reset the proctoring session linked to this attempt

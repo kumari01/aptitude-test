@@ -43,7 +43,22 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
         throw new Error("Invalid proctoring event type");
     }
 
-    // 4. Create event
+    // 4. Debounce check: If a tab/window violation event was logged within the last 3 seconds (e.g. while countdown modal is running), ignore duplicate
+    if (eventType === "TAB_SWITCH" || eventType === "FULLSCREEN_EXIT" || eventType === "WINDOW_BLUR") {
+        const lastViolation = await ProctoringEvent.findOne({
+            sessionId: session._id,
+            eventType: { $in: ["TAB_SWITCH", "FULLSCREEN_EXIT", "WINDOW_BLUR"] }
+        }).sort({ timestamp: -1 });
+
+        if (lastViolation && (Date.now() - new Date(lastViolation.timestamp).getTime()) < 3000) {
+            return {
+                event: lastViolation,
+                session
+            };
+        }
+    }
+
+    // 5. Create event
     const event = await ProctoringEvent.create({
         sessionId: session._id,
         eventType,
@@ -51,7 +66,7 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
         timestamp: new Date()
     });
 
-    // 5. Update session counters
+    // 6. Update session counters
     let updatedSession;
 
     if (eventType === "TAB_SWITCH") {

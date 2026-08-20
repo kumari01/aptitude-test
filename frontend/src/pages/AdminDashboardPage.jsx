@@ -61,17 +61,17 @@ export function AdminDashboardPage() {
   };
 
   return (
-    <div className="px-4 sm:px-6 md:px-10 py-6 max-w-6xl mx-auto space-y-8">
+    <div className="px-3 sm:px-5 lg:px-6 py-4 w-full space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
           Admin Dashboard & Telemetry
         </h1>
-        <p className="text-gray-500 mt-1">Real-time student attempt telemetry, test scores, and proctoring analytics</p>
+        <p className="text-gray-500 text-xs sm:text-sm mt-0.5">Real-time student attempt telemetry, test scores, and proctoring analytics</p>
       </div>
 
       {/* Admin Overview Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Total Managed Exams"
           value={overviewStats.totalExams || tests.length}
@@ -103,10 +103,10 @@ export function AdminDashboardPage() {
       </div>
 
       {/* Attempted Students Data Telemetry Log */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
               Attempted Students Telemetry Log
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
@@ -117,36 +117,37 @@ export function AdminDashboardPage() {
           {/* Search Input */}
           <input
             type="text"
-            placeholder="Search student or roll number..."
+            placeholder="Search student, roll number, or exam..."
             value={studentSearchQuery}
             onChange={(e) => setStudentSearchQuery(e.target.value)}
-            className="px-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none w-full sm:w-64 font-medium"
+            className="px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none w-full sm:w-64 font-medium"
           />
         </div>
 
         {loading ? (
-          <div className="py-16 text-center text-gray-400">
-            <Clock className="animate-spin mx-auto mb-2" size={28} />
+          <div className="py-12 text-center text-gray-400">
+            <Clock className="animate-spin mx-auto mb-2" size={24} />
             <p className="text-sm font-medium">Fetching student telemetry records...</p>
           </div>
         ) : attempts.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 bg-slate-50 rounded-xl border border-slate-200">
-            <User size={36} className="mx-auto mb-2 text-slate-300" />
+          <div className="text-center py-10 text-gray-400 bg-slate-50 rounded-xl border border-slate-200">
+            <User size={32} className="mx-auto mb-2 text-slate-300" />
             <p className="font-semibold text-slate-700 text-sm">No student attempt records logged yet.</p>
             <p className="text-xs text-slate-400 mt-1">Student exam scores and proctoring attempt logs will populate here in real-time.</p>
           </div>
         ) : (
           <div className="overflow-x-auto border border-gray-200 rounded-xl">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50 text-xs text-gray-500 font-semibold border-b border-gray-200 uppercase tracking-wider">
+            <table className="w-full text-xs sm:text-sm text-left">
+              <thead className="bg-gray-50 text-[11px] text-gray-500 font-semibold border-b border-gray-200 uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3.5">STUDENT & ROLL</th>
-                  <th className="px-4 py-3.5">DEPT</th>
-                  <th className="px-4 py-3.5">EXAM TITLE</th>
-                  <th className="px-4 py-3.5">SCORE & MARKS</th>
-                  <th className="px-4 py-3.5">VIOLATIONS</th>
-                  <th className="px-4 py-3.5">STATUS</th>
-                  <th className="px-4 py-3.5 text-right">DATE</th>
+                  <th className="px-3.5 py-3">STUDENT & ROLL</th>
+                  <th className="px-3.5 py-3">DEPT</th>
+                  <th className="px-3.5 py-3">EXAM TITLE</th>
+                  <th className="px-3.5 py-3">MARKS</th>
+                  <th className="px-3.5 py-3">SCORE (%)</th>
+                  <th className="px-3.5 py-3">VIOLATIONS</th>
+                  <th className="px-3.5 py-3">STATUS</th>
+                  <th className="px-3.5 py-3 text-right">DATE</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -159,60 +160,65 @@ export function AdminDashboardPage() {
                   )
                   .map((att) => (
                     <tr key={att.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-4 py-3.5">
-                        <div className="font-bold text-gray-900">{att.studentName}</div>
-                        <div className="text-xs text-gray-400 font-mono">Roll: {att.rollNumber}</div>
+                      <td className="px-3.5 py-3">
+                        <div className="font-bold text-gray-900 text-xs sm:text-sm">{att.studentName}</div>
+                        <div className="text-[11px] text-gray-400 font-mono">Roll: {att.rollNumber}</div>
                       </td>
-                      <td className="px-4 py-3.5 font-medium text-gray-600 text-xs">
+                      <td className="px-3.5 py-3 font-medium text-gray-600 text-xs">
                         {att.department}
                       </td>
-                      <td className="px-4 py-3.5">
+                      <td className="px-3.5 py-3">
                         <span className="font-bold text-gray-900 text-xs block">{att.testTitle}</span>
                         <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full inline-block mt-0.5">
                           {att.testType}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5">
+                      {/* MARKS COLUMN */}
+                      <td className="px-3.5 py-3 whitespace-nowrap">
                         {att.status === "Started" ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 w-fit">
-                              <Clock size={11} className="animate-spin text-blue-600" /> In Progress
-                            </span>
-                            <span className="text-[10px] text-gray-400">Total: {att.totalMarks || 10} Marks</span>
-                          </div>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100">
+                            <Clock size={11} className="animate-spin text-blue-600" /> In Progress
+                          </span>
                         ) : att.status === "Disqualified" || att.status === "Auto Submitted" ? (
-                          <div>
-                            <div className="font-bold text-red-700 text-xs">
-                              0 / {att.totalMarks || 10} Marks
-                            </div>
-                            <div className="text-[11px] font-bold text-red-600 mt-0.5">
-                              0% (Disqualified)
-                            </div>
-                          </div>
+                          <span className="font-bold text-red-700 text-xs sm:text-sm font-mono">
+                            0 / {att.totalMarks || 10}
+                          </span>
                         ) : (
-                          <div>
-                            <div className="font-bold text-gray-900 text-xs">
-                              {att.obtainedMarks ?? 0} / {att.totalMarks || 10} Marks
-                            </div>
-                            <div className={`text-[11px] font-bold mt-0.5 ${
-                              (att.score ?? 0) >= 40 ? "text-emerald-700" : "text-amber-700"
-                            }`}>
-                              {att.score ?? 0}% Score ({(att.score ?? 0) >= 40 ? "Passed" : "Failed"})
-                            </div>
-                          </div>
+                          <span className="font-bold text-gray-900 text-xs sm:text-sm font-mono">
+                            {att.obtainedMarks ?? 0} / {att.totalMarks || 10}
+                          </span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex flex-col gap-1">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold w-fit ${
+                      {/* SCORE COLUMN */}
+                      <td className="px-3.5 py-3 whitespace-nowrap">
+                        {att.status === "Started" ? (
+                          <span className="text-gray-400 text-xs font-medium">—</span>
+                        ) : att.status === "Disqualified" || att.status === "Auto Submitted" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                            0% (Disqualified)
+                          </span>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            (att.score ?? 0) >= 40 
+                              ? "bg-emerald-100 text-emerald-800" 
+                              : "bg-amber-100 text-amber-800"
+                          }`}>
+                            {att.score ?? 0}% ({(att.score ?? 0) >= 40 ? "Passed" : "Failed"})
+                          </span>
+                        )}
+                      </td>
+                      {/* VIOLATIONS */}
+                      <td className="px-3.5 py-3 whitespace-nowrap">
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold w-fit ${
                             (att.violations > 0 || att.tabSwitches > 0)
                               ? "bg-red-50 text-red-700 border border-red-100"
                               : "bg-emerald-50 text-emerald-700 border border-emerald-100"
                           }`}>
-                            <ShieldAlert size={12} className={(att.violations > 0 || att.tabSwitches > 0) ? "text-red-600" : "text-emerald-600"} />
+                            <ShieldAlert size={11} className={(att.violations > 0 || att.tabSwitches > 0) ? "text-red-600" : "text-emerald-600"} />
                             {(att.violations !== undefined && att.violations !== null && att.violations > 0)
                               ? `${att.violations} violation${att.violations > 1 ? "s" : ""}`
-                              : (att.tabSwitches > 0 ? `${att.tabSwitches} switches` : "0 violations (Clean)")}
+                              : (att.tabSwitches > 0 ? `${att.tabSwitches} switches` : "0 (Clean)")}
                           </span>
                           {att.riskScore > 0 && (
                             <span className="text-[10px] text-amber-600 font-semibold">
@@ -221,8 +227,9 @@ export function AdminDashboardPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3.5">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${
+                      {/* STATUS */}
+                      <td className="px-3.5 py-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider ${
                           att.status === "Auto Submitted" || att.status === "Disqualified"
                             ? "bg-red-100 text-red-700"
                             : att.status === "Time Expired"
@@ -234,7 +241,8 @@ export function AdminDashboardPage() {
                           {att.status === "Started" ? "In Progress" : (att.status || "Submitted")}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-right text-xs text-gray-400 font-medium">
+                      {/* DATE */}
+                      <td className="px-3.5 py-3 text-right text-xs text-gray-400 font-medium whitespace-nowrap">
                         {new Date(att.date).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
                       </td>
                     </tr>

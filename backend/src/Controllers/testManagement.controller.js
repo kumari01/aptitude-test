@@ -403,18 +403,31 @@ const getAdminAttempts = async (req, res) => {
             .limit(100);
 
         // Deduplicate attempts per student + test to ensure single consolidated telemetry row per attempt
+        const getRawIdStr = (val) => {
+            if (!val) return "";
+            if (typeof val === "object" && val._id) return val._id.toString();
+            return val.toString();
+        };
+
         const uniqueMap = new Map();
         for (const att of attempts) {
-            const studentIdStr = att.student_id?._id?.toString() || att.student_id?.toString() || att.rollNumber || "unknown";
-            const testIdStr = att.testId?._id?.toString() || att.exam_id?._id?.toString() || att.exam_id?.toString() || att.testId?.toString() || "test";
+            const studentIdStr = getRawIdStr(att.student_id) || att.rollNumber || "unknown";
+            const testIdStr = getRawIdStr(att.testId) || getRawIdStr(att.exam_id) || "test";
             const key = `${studentIdStr}_${testIdStr}`;
 
             if (!uniqueMap.has(key)) {
                 uniqueMap.set(key, att);
             } else {
                 const existing = uniqueMap.get(key);
-                // Prefer submitted/auto-submitted/disqualified over started, or newer updated
+                const existingScore = Math.max(existing.score || 0, existing.obtainedMarks || 0);
+                const newScore = Math.max(att.score || 0, att.obtainedMarks || 0);
+
+                // Prefer submitted/auto-submitted/disqualified over started, or higher score
                 if (existing.status === "Started" && att.status !== "Started") {
+                    uniqueMap.set(key, att);
+                } else if (existing.status !== "Started" && att.status === "Started") {
+                    // keep existing submitted attempt
+                } else if (newScore > existingScore) {
                     uniqueMap.set(key, att);
                 }
             }
@@ -448,11 +461,24 @@ const getAdminAttempts = async (req, res) => {
             }
         });
 
+        // Prefetch student answers for manual scoring fallback
+        const StudentAnswer = require("../model/studentAnswer.model");
+        const allAnswers = await StudentAnswer.find({ attempt_id: { $in: attemptIds } });
+        const answersMap = new Map();
+        allAnswers.forEach(ans => {
+            const aId = ans.attempt_id?.toString();
+            if (aId) {
+                if (!answersMap.has(aId)) answersMap.set(aId, []);
+                answersMap.get(aId).push(ans);
+            }
+        });
+
         // Prefetch any missing students
         const allStudentIds = [...new Set(consolidatedAttempts.map(a => 
             (a.student_id?._id || a.student_id)?.toString()
         ).filter(Boolean))];
 
+        const { Student } = require("../model/user.model");
         const studentDocs = await Student.find({ _id: { $in: allStudentIds } });
         const studentMap = new Map(studentDocs.map(s => [s._id.toString(), s]));
 
@@ -528,9 +554,25 @@ const getAdminAttempts = async (req, res) => {
                 obtainedMarks = 0;
                 percentage = 0;
             } else if (!isStarted) {
-                obtainedMarks = typeof att.obtainedMarks === "number"
-                    ? att.obtainedMarks
-                    : (typeof att.score === "number" ? att.score : 0);
+                if (typeof att.obtainedMarks === "number" && att.obtainedMarks > 0) {
+                    obtainedMarks = att.obtainedMarks;
+                } else if (typeof att.score === "number" && att.score > 0) {
+                    obtainedMarks = att.score;
+                }
+
+                // If obtainedMarks is 0, check student answers for graded marks
+                const attemptAnswers = answersMap.get(att._id.toString()) || [];
+                if (obtainedMarks === 0 && attemptAnswers.length > 0) {
+                    let manualSum = 0;
+                    for (const ans of attemptAnswers) {
+                        const q = questionsList.find(qItem => qItem._id.toString() === ans.question_id?.toString());
+                        if (q && q.correct_option_id && ans.selected_option_id && q.correct_option_id.toString() === ans.selected_option_id.toString()) {
+                            manualSum += (q.marks || 1);
+                        }
+                    }
+                    if (manualSum > 0) obtainedMarks = manualSum;
+                }
+
                 percentage = totalMarks > 0 ? Math.min(100, Math.max(0, Math.round((obtainedMarks / totalMarks) * 100))) : 0;
             }
 

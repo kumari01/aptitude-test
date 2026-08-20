@@ -21,6 +21,7 @@ export function DashboardPage() {
   const [liveExam, setLiveExam] = useState(null);
   const [totalAssignedCount, setTotalAssignedCount] = useState(0);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardExamTitle, setLeaderboardExamTitle] = useState("");
 
   const isAdmin = !!localStorage.getItem("admin");
 
@@ -44,6 +45,9 @@ export function DashboardPage() {
         if (assignedRes?.data?.tests) {
           setTotalAssignedCount(assignedRes.data.tests.length);
         }
+
+        let targetExamId = null;
+
         // Find the most appropriate active, upcoming, or live test for the banner
         if (assignedRes?.data?.tests && assignedRes.data.tests.length > 0) {
           const testsList = assignedRes.data.tests;
@@ -76,7 +80,7 @@ export function DashboardPage() {
             activeItem = testsList.find((item) => !item.attempt?.status || !["Submitted", "Auto Submitted", "Time Expired", "Completed"].includes(item.attempt.status)) || testsList[0];
           }
 
-          const targetExamId = activeItem.test._id;
+          targetExamId = activeItem.test._id;
           const startAtDate = activeItem.schedule?.startAt ? new Date(activeItem.schedule.startAt) : null;
           const isUpcoming = startAtDate ? now < startAtDate : false;
 
@@ -93,16 +97,20 @@ export function DashboardPage() {
             attemptStatus: activeItem.attempt?.status,
             attemptId: activeItem.attempt?._id,
           });
-
-          // Fetch leaderboard for this test if available
-          api.get(`/leaderboard/${targetExamId}`)
-            .then((lbRes) => {
-              if (lbRes.data?.leaderboard) {
-                setLeaderboard(lbRes.data.leaderboard);
-              }
-            })
-            .catch(() => null);
         }
+
+        // Fetch leaderboard (for active exam or latest exam with completed submissions)
+        const lbUrl = targetExamId ? `/leaderboard/${targetExamId}` : "/leaderboard/latest";
+        api.get(lbUrl)
+          .then((lbRes) => {
+            if (lbRes.data?.leaderboard) {
+              setLeaderboard(lbRes.data.leaderboard);
+              if (lbRes.data.testTitle) {
+                setLeaderboardExamTitle(lbRes.data.testTitle);
+              }
+            }
+          })
+          .catch(() => null);
       } catch (error) {
         console.error("Dashboard fetch error:", error);
 
@@ -203,7 +211,11 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
           label="Your Rank"
-          value={progress?.rank || "—"}
+          value={
+            (progress?.rank && progress.rank !== "—")
+              ? progress.rank
+              : (leaderboard.find(l => l.studentId === student?._id)?.rank ? `#${leaderboard.find(l => l.studentId === student?._id).rank}` : "—")
+          }
           icon={<Award size={17} />}
           iconBg="#FEF3C7"
           iconColor="#D97706"
@@ -219,8 +231,8 @@ export function DashboardPage() {
           label="Exams Completed"
           value={
             progress
-              ? `${progress.examsCompleted} / ${progress.totalConducted || Math.max(totalAssignedCount, progress.examsCompleted)}`
-              : "0 / 0"
+              ? `${progress.examsCompleted || 0} / ${progress.totalExams || progress.totalConducted || totalAssignedCount || 0}`
+              : `${0} / ${totalAssignedCount || 0}`
           }
           icon={<FileText size={17} />}
           iconBg="#DBEAFE"
@@ -239,10 +251,15 @@ export function DashboardPage() {
       <div className="grid lg:grid-cols-[1fr_360px] gap-6">
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
-              Leaderboard
-            </h3>
-            <span className="text-sm text-gray-400">Exam Standings</span>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
+                Leaderboard
+              </h3>
+              <p className="text-xs text-gray-400 font-medium mt-0.5">Top student performers</p>
+            </div>
+            <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
+              {leaderboardExamTitle || "Exam Standings"}
+            </span>
           </div>
           {leaderboard.length === 0 ? (
             <p className="text-sm text-gray-400 py-6 text-center">No leaderboard entries available yet.</p>
@@ -252,7 +269,7 @@ export function DashboardPage() {
                 <div
                   key={p._id || idx}
                   className={`flex items-center justify-between py-3 px-3 rounded-lg ${
-                    p.studentId === student?._id ? "bg-gray-50 border border-gray-100" : ""
+                    (p.studentId === student?._id || p.student_id?._id === student?._id) ? "bg-gray-50 border border-gray-100" : ""
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -275,7 +292,9 @@ export function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <span className="text-sm font-bold text-gray-900">{p.score}%</span>
+                  <span className="text-sm font-bold text-gray-900">
+                    {typeof p.score === "string" && p.score.endsWith("%") ? p.score : `${p.score ?? 0}%`}
+                  </span>
                 </div>
               ))}
             </div>

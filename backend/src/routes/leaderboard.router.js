@@ -8,7 +8,9 @@ const {
 const router = express.Router();
 
 
-// Get complete leaderboard
+// Get complete leaderboard (specific exam, latest, or root)
+router.get("/", getLeaderboard);
+router.get("/latest", getLeaderboard);
 router.get("/:examId", getLeaderboard);
 
 

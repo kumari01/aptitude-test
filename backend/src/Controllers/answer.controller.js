@@ -138,6 +138,15 @@ const submitExam = async (req, res) => {
             });
         }
 
+        if (["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status)) {
+            return res.status(200).json({
+                message: "Exam already submitted",
+                score: attempt.score,
+                totalMarks: attempt.score,
+                attempt
+            });
+        }
+
         const result = await submitAttempt(
             attemptId,
             submissionType || "Submitted"

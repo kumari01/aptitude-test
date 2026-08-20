@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, HelpCircle, Check, X } from "lucide-react";
 import { INK, BRAND, FONT_DISPLAY } from "../constants/theme";
+import { exitFullscreen, isFullscreen } from "../utils/fullscreen";
 import api from "../api/axios";
 
 export function ExamResultPage() {
@@ -20,6 +21,13 @@ export function ExamResultPage() {
   });
 
   const [activeFilter, setActiveFilter] = useState("all"); // "all" | "correct" | "incorrect" | "skipped"
+
+  // Automatically exit fullscreen when landing on result page
+  useEffect(() => {
+    if (isFullscreen()) {
+      exitFullscreen().catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     const targetId = state.attemptId || examId;
@@ -64,7 +72,17 @@ export function ExamResultPage() {
   });
 
   return (
-    <div className="px-4 sm:px-6 md:px-10 py-10 max-w-4xl mx-auto space-y-6">
+    <div className="px-4 sm:px-6 md:px-10 py-6 max-w-4xl mx-auto space-y-6">
+      {/* Top Left Return to Dashboard Button */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-900 transition-all shadow-sm cursor-pointer"
+        >
+          <ChevronLeft size={16} /> Return to Dashboard
+        </button>
+      </div>
+
       {/* Disqualification Banner */}
       {isDisqualified && (
         <div className="bg-red-600 text-white rounded-2xl p-5 shadow-md text-sm font-semibold flex items-center gap-3">
@@ -270,16 +288,6 @@ export function ExamResultPage() {
             ))
           )}
         </div>
-      </div>
-
-      {/* Navigation Controls */}
-      <div className="flex items-center gap-3 pt-2">
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="flex items-center gap-1.5 border border-gray-200 bg-white rounded-xl px-6 py-3 font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm text-sm cursor-pointer"
-        >
-          <ChevronLeft size={16} /> Return to Dashboard
-        </button>
       </div>
     </div>
   );

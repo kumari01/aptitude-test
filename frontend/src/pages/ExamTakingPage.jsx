@@ -4,7 +4,7 @@ import { Clock, Flag, ChevronLeft, ChevronRight, AlertCircle, Loader2 } from "lu
 import { formatTime } from "../utils/formatters";
 import { BRAND, BRAND_TINT, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
 import { useToast } from "../context/ToastContext";
-import { requestFullscreen, isFullscreen } from "../utils/fullscreen";
+import { requestFullscreen, exitFullscreen, isFullscreen } from "../utils/fullscreen";
 import api from "../api/axios";
 
 export function ExamTakingPage() {
@@ -39,6 +39,8 @@ export function ExamTakingPage() {
   const proctoringSessionIdRef = useRef(proctoringSessionId);
   const tabSwitchLimitRef = useRef(tabSwitchLimit);
   const warningModalRef = useRef(warningModal);
+  const isWarningActiveRef = useRef(false);
+  const warningGraceUntilRef = useRef(0);
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
   useEffect(() => { questionsRef.current = questions; }, [questions]);
@@ -47,13 +49,18 @@ export function ExamTakingPage() {
   useEffect(() => { attemptIdRef.current = attemptId; }, [attemptId]);
   useEffect(() => { proctoringSessionIdRef.current = proctoringSessionId; }, [proctoringSessionId]);
   useEffect(() => { tabSwitchLimitRef.current = tabSwitchLimit; }, [tabSwitchLimit]);
-  useEffect(() => { warningModalRef.current = warningModal; }, [warningModal]);
+  useEffect(() => { 
+    warningModalRef.current = warningModal; 
+    if (!warningModal) isWarningActiveRef.current = false;
+  }, [warningModal]);
+
   // Trigger immediate disqualification and auto-submission
   const triggerDisqualification = async (reason) => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (modalTimerRef.current) clearInterval(modalTimerRef.current);
     setSubmitting(true);
     setWarningModal(null);
+    isWarningActiveRef.current = false;
 
     const sId = proctoringSessionIdRef.current;
     const currAttemptId = attemptIdRef.current || attemptId;
@@ -73,6 +80,10 @@ export function ExamTakingPage() {
       } catch (err) {
         console.warn("Fallback submit error:", err);
       }
+    }
+
+    if (isFullscreen()) {
+      exitFullscreen().catch(() => {});
     }
 
     navigate(`/exams/${examId}/result`, {
@@ -95,6 +106,9 @@ export function ExamTakingPage() {
     if (modalTimerRef.current) clearInterval(modalTimerRef.current);
     setWarningModal(null);
     setModalCountdown(10);
+    isWarningActiveRef.current = false;
+    // 3-second grace period after modal dismissal so refocusing/fullscreen doesn't trigger repeat violations
+    warningGraceUntilRef.current = Date.now() + 3000;
 
     // Automatically re-trigger fullscreen on acknowledgement click if exited
     if (!isFullscreen()) {
@@ -131,8 +145,80 @@ export function ExamTakingPage() {
     };
   }, [warningModal]);
 
+  // Automatically auto-submit the exam if the student closes the browser, quits the tab, or navigates away
+  useEffect(() => {
+    const handleUnloadOrQuit = () => {
+      if (submittingRef.current || !attemptIdRef.current) return;
+      submittingRef.current = true;
+
+      const currAttemptId = attemptIdRef.current;
+      const currSessionId = proctoringSessionIdRef.current;
+      const token = localStorage.getItem("token") || "";
+
+      const baseUrl = api.defaults.baseURL || "http://localhost:5000/api";
+      const submitUrl = `${baseUrl}/answers/submit`;
+
+      const payload = JSON.stringify({
+        attemptId: currAttemptId,
+        submissionType: "Auto Submitted",
+        token,
+      });
+
+      let beaconSent = false;
+      if (navigator.sendBeacon) {
+        try {
+          const blob = new Blob([payload], { type: "application/json" });
+          beaconSent = navigator.sendBeacon(submitUrl, blob);
+        } catch (e) {
+          beaconSent = false;
+        }
+      }
+
+      if (!beaconSent) {
+        try {
+          fetch(submitUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": token ? `Bearer ${token}` : "",
+            },
+            body: payload,
+            keepalive: true,
+            credentials: "include",
+          }).catch(() => {});
+        } catch (e) {}
+      }
+
+      if (currSessionId) {
+        try {
+          const endSessionUrl = `${baseUrl}/v1/proctoring/sessions/${currSessionId}/end`;
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(endSessionUrl, new Blob([JSON.stringify({ token })], { type: "application/json" }));
+          }
+        } catch (e) {}
+      }
+    };
+
+    window.addEventListener("beforeunload", handleUnloadOrQuit);
+    window.addEventListener("pagehide", handleUnloadOrQuit);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleUnloadOrQuit);
+      window.removeEventListener("pagehide", handleUnloadOrQuit);
+
+      if (!submittingRef.current && attemptIdRef.current) {
+        handleUnloadOrQuit();
+      }
+    };
+  }, []);
+
+  const isInitiatingRef = useRef(false);
+
   // Initialize test attempt from API
   useEffect(() => {
+    if (isInitiatingRef.current) return;
+    isInitiatingRef.current = true;
+
     async function initExam() {
       try {
         setLoading(true);
@@ -258,6 +344,10 @@ export function ExamTakingPage() {
 
     const answeredCount = Object.keys(answers).length;
 
+    if (isFullscreen()) {
+      exitFullscreen().catch(() => {});
+    }
+
     navigate(`/exams/${examId}/result`, {
       state: {
         attemptId,
@@ -273,7 +363,11 @@ export function ExamTakingPage() {
 
   const logProctoringEvent = async (eventType) => {
     const sId = proctoringSessionIdRef.current;
-    if (!sId || submittingRef.current || warningModalRef.current) return;
+    if (!sId || submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
+
+    // Immediately lock out subsequent events synchronously while this event is evaluated and modal is active
+    isWarningActiveRef.current = true;
+
     try {
       const res = await api.post(`/v1/proctoring/sessions/${sId}/events`, {
         eventType,
@@ -289,6 +383,7 @@ export function ExamTakingPage() {
 
         // Do not show warning modal for copy/paste actions as per requirements
         if (eventType === "COPY" || eventType === "PASTE") {
+          isWarningActiveRef.current = false;
           return;
         }
 
@@ -302,9 +397,12 @@ export function ExamTakingPage() {
           switchCount: currentSwitches,
           limit: tabSwitchLimitRef.current,
         });
+      } else {
+        isWarningActiveRef.current = false;
       }
     } catch (err) {
       console.warn("Failed to log proctoring event to backend:", err);
+      isWarningActiveRef.current = false;
     }
   };
 
@@ -315,9 +413,10 @@ export function ExamTakingPage() {
     let lastTabSwitchTime = 0;
 
     const handleVisibilityChange = () => {
+      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
       if (document.hidden) {
         const now = Date.now();
-        if (now - lastTabSwitchTime > 1000) {
+        if (now - lastTabSwitchTime > 1500) {
           lastTabSwitchTime = now;
           logProctoringEvent("TAB_SWITCH");
         }
@@ -325,14 +424,16 @@ export function ExamTakingPage() {
     };
 
     const handleWindowBlur = () => {
+      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
       const now = Date.now();
-      if (now - lastTabSwitchTime > 1000) {
+      if (now - lastTabSwitchTime > 1500) {
         lastTabSwitchTime = now;
         logProctoringEvent("TAB_SWITCH"); // Log as TAB_SWITCH so switching windows/monitors increments tabSwitchCount
       }
     };
 
     const handleFullscreenChange = () => {
+      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
       const isFull = document.fullscreenElement ||
         document.webkitFullscreenElement ||
         document.mozFullScreenElement ||
@@ -344,8 +445,9 @@ export function ExamTakingPage() {
 
     let lastResizeTime = 0;
     const handleResize = () => {
+      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
       const now = Date.now();
-      if (now - lastResizeTime < 1500) return;
+      if (now - lastResizeTime < 2000) return;
 
       const thresholdWidth = screen.width - 60;
       const thresholdHeight = screen.height - 60;
@@ -357,7 +459,7 @@ export function ExamTakingPage() {
 
     const handleCopy = (e) => {
       if (e && e.preventDefault) e.preventDefault();
-      if (!isFullscreen()) {
+      if (!isFullscreen() && !warningModalRef.current && !isWarningActiveRef.current && Date.now() >= warningGraceUntilRef.current) {
         requestFullscreen().catch(() => { });
       }
     };

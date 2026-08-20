@@ -236,12 +236,21 @@ const getStudentProgress = async (req, res) => {
     const totalAttempts = attempts.length;
 
     if (totalAttempts === 0) {
+      const Test = require("../model/testModel/test.model");
+      let totalExams = 0;
+      try {
+        totalExams = await Test.countDocuments({ status: { $ne: "Archived" } });
+      } catch (e) {}
+
       return res.status(200).json({
         totalAttempts: 0,
         passedCount: 0,
         examsCompleted: 0,
+        totalExams: totalExams || 0,
+        totalConducted: totalExams || 0,
         avgScore: "0%",
         bestScore: "0%",
+        rank: "—",
         recentAttempts: [],
       });
     }
@@ -283,7 +292,11 @@ const getStudentProgress = async (req, res) => {
         totalMarks = Math.max(att.score, 100);
       }
 
-      const pctValue = Math.min(100, Math.max(0, Math.round((att.score / totalMarks) * 100)));
+      const rawScore = typeof att.obtainedMarks === "number" && att.obtainedMarks > 0 
+        ? att.obtainedMarks 
+        : (typeof att.score === "number" ? att.score : 0);
+
+      const pctValue = Math.min(100, Math.max(0, Math.round((rawScore / totalMarks) * 100)));
       
       totalPct += pctValue;
       if (pctValue > bestPct) bestPct = pctValue;
@@ -300,7 +313,7 @@ const getStudentProgress = async (req, res) => {
         title: testObj?.title || "Assessment Attempt",
         category: testObj?.testType || "Aptitude",
         score: `${pctValue}%`,
-        fraction: `${att.score}/${totalMarks}`,
+        fraction: `${rawScore}/${totalMarks}`,
         status: statusText,
         disqualified: isDisqualified,
         date: att.submitted_at ? new Date(att.submitted_at).toLocaleDateString() : (att.started_at ? new Date(att.started_at).toLocaleDateString() : "N/A"),
@@ -321,13 +334,27 @@ const getStudentProgress = async (req, res) => {
       totalConducted = Math.max(1, examsCompletedCount);
     }
 
+    let rank = "—";
+    try {
+      const Leaderboard = require("../model/leaderboard.model");
+      const latestEntry = await Leaderboard.findOne({
+        student_id: studentId
+      }).sort({ updatedAt: -1 });
+
+      if (latestEntry?.rank) {
+        rank = `#${latestEntry.rank}`;
+      }
+    } catch (e) {}
+
     res.status(200).json({
       totalAttempts,
       passedCount,
       examsCompleted: examsCompletedCount,
+      totalExams: totalConducted,
       totalConducted,
       avgScore,
       bestScore,
+      rank,
       recentAttempts,
     });
   } catch (error) {
