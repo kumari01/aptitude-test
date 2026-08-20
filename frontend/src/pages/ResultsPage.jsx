@@ -5,6 +5,7 @@ import StatCard from "../components/common/StatCard";
 import StatusPill from "../components/common/StatusPill";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
+import { ResultsPageSkeleton } from "../components/skeletons";
 
 export function ResultsPage() {
   const navigate = useNavigate();
@@ -50,6 +51,10 @@ export function ResultsPage() {
     if (query && !(r.title || "").toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
+
+  if (loading) {
+    return <ResultsPageSkeleton />;
+  }
 
   return (
     <div className="px-4 sm:px-6 md:px-10 py-6 max-w-6xl mx-auto">

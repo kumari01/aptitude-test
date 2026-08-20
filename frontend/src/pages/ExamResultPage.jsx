@@ -4,6 +4,7 @@ import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, HelpCircle, Check, X }
 import { INK, BRAND, FONT_DISPLAY } from "../constants/theme";
 import { exitFullscreen, isFullscreen } from "../utils/fullscreen";
 import api from "../api/axios";
+import { ExamResultSkeleton } from "../components/skeletons";
 
 export function ExamResultPage() {
   const { examId } = useParams();
@@ -11,6 +12,7 @@ export function ExamResultPage() {
   const navigate = useNavigate();
 
   const state = location.state || {};
+  const [loading, setLoading] = useState(true);
   const [resultData, setResultData] = useState({
     correct: state.correct ?? 0,
     total: state.total ?? 0,
@@ -25,6 +27,7 @@ export function ExamResultPage() {
   useEffect(() => {
     const targetId = state.attemptId || examId;
     if (targetId) {
+      setLoading(true);
       api.get(`/answers/results/${targetId}`)
         .then((res) => {
           if (res.data) {
@@ -45,9 +48,16 @@ export function ExamResultPage() {
             });
           }
         })
-        .catch((err) => console.warn("Could not fetch attempt result from backend:", err));
+        .catch((err) => console.warn("Could not fetch attempt result from backend:", err))
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
     }
   }, [state.attemptId, examId]);
+
+  if (loading) {
+    return <ExamResultSkeleton />;
+  }
 
   const { correct, total, answeredCount, percentage, wrongCount, breakdown } = resultData;
   const wrong = wrongCount !== undefined ? wrongCount : Math.max(0, answeredCount - correct);
