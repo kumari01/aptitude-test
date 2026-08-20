@@ -85,6 +85,47 @@ const updateTestTarget = async (req, res) => {
     }
 };
 
+// Helper to compute dynamic test metadata (actual questions count, duration, total marks)
+async function computeTestMetadata(testDoc) {
+    const Question = require("../model/question.model");
+    const directQuestions = await Question.find({
+        $or: [{ testId: testDoc._id }, { exam_id: testDoc._id }]
+    });
+    const sections = await Section.find({ testId: testDoc._id });
+    let totalSectionQuestions = 0;
+    let totalSectionMarks = 0;
+
+    for (const sec of sections) {
+        const sqList = await SectionQuestion.find({ sectionId: sec._id });
+        const secMarks = sqList.reduce((sum, sq) => sum + (sq.marks || 1), 0);
+        totalSectionQuestions += sqList.length;
+        totalSectionMarks += (sec.totalMarks || secMarks || 0);
+    }
+
+    const totalDirectMarks = directQuestions.reduce((sum, q) => sum + (q.marks || 1), 0);
+    const calculatedQuestions = Math.max(testDoc.totalQuestions || 0, directQuestions.length, totalSectionQuestions);
+    const finalTotalMarks = testDoc.totalMarks || totalDirectMarks || totalSectionMarks || (calculatedQuestions > 0 ? calculatedQuestions : 10);
+    const passingMarks = testDoc.passingMarks || Math.ceil(finalTotalMarks * 0.4);
+    const duration = testDoc.durationMinutes || testDoc.duration_minutes || 30;
+
+    return {
+        _id: testDoc._id,
+        title: testDoc.title,
+        description: testDoc.description || "",
+        category: testDoc.category || testDoc.testType || "Aptitude",
+        testType: testDoc.testType || testDoc.category || "Aptitude",
+        durationMinutes: duration,
+        duration_minutes: duration,
+        totalQuestions: calculatedQuestions,
+        totalMarks: finalTotalMarks,
+        passingMarks: passingMarks,
+        status: testDoc.status || "Draft",
+        maxAttempts: testDoc.maxAttempts || 1,
+        createdAt: testDoc.createdAt,
+        updatedAt: testDoc.updatedAt
+    };
+}
+
 // List ALL tests (admin dashboard view) with settings & schedules
 const listAllTests = async (req, res) => {
     try {
@@ -94,8 +135,10 @@ const listAllTests = async (req, res) => {
         for (const t of tests) {
             const setting = await TestSetting.findOne({ testId: t._id });
             const schedule = await TestSchedule.findOne({ testId: t._id }).sort({ createdAt: -1 });
+            const computed = await computeTestMetadata(t);
+
             detailedTests.push({
-                test: t,
+                test: computed,
                 setting,
                 schedule
             });
@@ -375,8 +418,10 @@ const listStudentAssignedTests = async (req, res) => {
                 student_id: student._id
             }).sort({ createdAt: -1 });
 
+            const computed = await computeTestMetadata(t);
+
             detailedTests.push({
-                test: t,
+                test: computed,
                 setting,
                 schedule,
                 attempt: attempt ? {

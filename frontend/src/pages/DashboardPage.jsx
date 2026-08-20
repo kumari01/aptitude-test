@@ -110,10 +110,13 @@ export function DashboardPage() {
           setLiveExam({
             id: targetExamId,
             title: activeItem.test.title,
-            questions: activeItem.test.totalQuestions || 10,
-            minutes: activeItem.test.duration_minutes || activeItem.test.durationMinutes || 30,
+            category: activeItem.test.category || activeItem.test.testType || "Aptitude",
+            questions: activeItem.test.totalQuestions !== undefined ? activeItem.test.totalQuestions : 0,
+            minutes: activeItem.test.durationMinutes || activeItem.test.duration_minutes || 30,
+            totalMarks: activeItem.test.totalMarks ?? 0,
+            passingMarks: activeItem.test.passingMarks,
             due: activeItem.schedule?.endAt
-              ? new Date(activeItem.schedule.endAt).toLocaleDateString()
+              ? new Date(activeItem.schedule.endAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
               : "Scheduled",
             startAtFormatted: startAtDate ? startAtDate.toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : null,
             isUpcoming,
