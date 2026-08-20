@@ -10,6 +10,9 @@ router.post("/create", authenticate, requireAdmin, controller.createTest);
 // Update test proctoring & evaluation settings
 router.put("/:testId/settings", authenticate, requireAdmin, controller.updateTestSettings);
 
+// Unified full exam configuration update (General, Proctoring, Target, Schedule)
+router.put("/:testId/full-update", authenticate, requireAdmin, controller.updateFullTestConfiguration);
+
 // Update test target group
 router.put("/:testId/target", authenticate, requireAdmin, controller.updateTestTarget);
 

@@ -692,11 +692,110 @@ const getAdminAttempts = async (req, res) => {
     }
 };
 
+// Full unified update for exam configuration (General, Settings, Target, Schedule)
+const updateFullTestConfiguration = async (req, res) => {
+    try {
+        const { testId } = req.params;
+        const {
+            title,
+            category,
+            testType,
+            durationMinutes,
+            maxAttempts,
+            status,
+            proctoringEnabled,
+            tabSwitchLimit,
+            autoSubmit,
+            targetType,
+            departments,
+            batches,
+            studentRollNumbers,
+            startAt,
+            endAt
+        } = req.body;
+
+        const test = await Test.findById(testId);
+        if (!test) {
+            return res.status(404).json({ message: "Test not found" });
+        }
+
+        // 1. Update Test General Info
+        if (title !== undefined) test.title = title;
+        if (category !== undefined) test.category = category;
+        if (testType !== undefined) test.testType = testType;
+        if (durationMinutes !== undefined) {
+            test.durationMinutes = Number(durationMinutes);
+            test.duration_minutes = Number(durationMinutes);
+        }
+        if (maxAttempts !== undefined) test.maxAttempts = Number(maxAttempts);
+        if (status !== undefined) test.status = status;
+        await test.save();
+
+        // 2. Update Settings
+        const setting = await TestSetting.findOneAndUpdate(
+            { testId },
+            {
+                proctoringEnabled: proctoringEnabled !== undefined ? proctoringEnabled : true,
+                tabSwitchLimit: tabSwitchLimit !== undefined ? Number(tabSwitchLimit) : 3,
+                autoSubmit: autoSubmit !== undefined ? autoSubmit : true
+            },
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
+        );
+
+        // 3. Update Target
+        const target = await TestTarget.findOneAndUpdate(
+            { testId },
+            {
+                targetType: targetType || "All",
+                departments: departments || [],
+                batches: batches || [],
+                studentRollNumbers: studentRollNumbers || []
+            },
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
+        );
+
+        // 4. Update Schedule if timestamps provided
+        let schedule = null;
+        if (startAt || endAt) {
+            schedule = await TestSchedule.findOne({ testId }).sort({ createdAt: -1 });
+            if (schedule) {
+                if (startAt) schedule.startAt = new Date(startAt);
+                if (endAt) schedule.endAt = new Date(endAt);
+                if (departments) schedule.targetDepartments = departments;
+                await schedule.save();
+            } else if (startAt && endAt) {
+                schedule = new TestSchedule({
+                    testId,
+                    startAt: new Date(startAt),
+                    endAt: new Date(endAt),
+                    targetDepartments: departments || [],
+                    status: status === "Published" ? "Scheduled" : "Draft"
+                });
+                await schedule.save();
+            }
+        }
+
+        const computed = await computeTestMetadata(test);
+
+        res.status(200).json({
+            message: "Exam configuration updated successfully",
+            test: computed,
+            setting,
+            target,
+            schedule
+        });
+    } catch (err) {
+        console.error("Error updating full test configuration:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 module.exports = {
     createTest,
     updateTestTarget,
     listAllTests,
     updateTestSettings,
+    updateFullTestConfiguration,
     scheduleTest,
     createSection,
     addQuestionToSection,

@@ -22,7 +22,13 @@ import StatCard from "../components/common/StatCard";
 import AdminWorkflowVisualizer from "../components/admin/AdminWorkflowVisualizer";
 import CreateTestWizardModal from "../components/admin/CreateTestWizardModal";
 import LiveProctoringMonitorModal from "../components/admin/LiveProctoringMonitorModal";
+import ExamSettingsStudioModal from "../components/admin/ExamSettingsStudioModal";
 import { ExamsSkeleton, StudentExamsSkeleton, AdminExamsSkeleton } from "../components/skeletons";
+import { 
+  Building2, 
+  ShieldCheck, 
+  Sliders 
+} from "lucide-react";
 
 const formatForDateTimeLocal = (dateInput) => {
   const d = dateInput ? new Date(dateInput) : new Date();
@@ -56,29 +62,21 @@ export function ExamsPage() {
   const [monitorTestId, setMonitorTestId] = useState("");
   const [monitorTestTitle, setMonitorTestTitle] = useState("");
 
+  // Enterprise Settings Studio Modal
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [studioTest, setStudioTest] = useState(null);
+  const [studioInitialTab, setStudioInitialTab] = useState("proctoring");
+
   const [activeModal, setActiveModal] = useState(null);
   const [selectedTestId, setSelectedTestId] = useState("");
 
-  // Forms for Quick Actions
+  // Quick action form for adding standalone questions
   const [addQuestionForm, setAddQuestionForm] = useState({
     testId: "",
     questionText: "",
     options: ["Option 1", "Option 2", "Option 3", "Option 4"],
     correctAnswerIndex: 0,
     marks: 1
-  });
-
-  const [settingsForm, setSettingsForm] = useState({
-    testId: "",
-    tabSwitchLimit: 3,
-    proctoringEnabled: true,
-    autoSubmit: true
-  });
-
-  const [scheduleForm, setScheduleForm] = useState({
-    testId: "",
-    startAt: formatForDateTimeLocal(new Date()),
-    endAt: formatForDateTimeLocal(new Date(Date.now() + 3600000))
   });
 
   useEffect(() => {
@@ -113,44 +111,45 @@ export function ExamsPage() {
         }));
         setAssignedExams(formatted);
       }
+      setLoading(false);
     } catch (err) {
-      console.warn("Could not fetch assigned tests:", err);
-      setAssignedExams([]);
-    } finally {
+      console.error("Error fetching assigned tests:", err);
+      toast.error(err.response?.data?.message || "Failed to load assigned tests");
       setLoading(false);
     }
   };
 
   // Admin fetch
   const fetchAdminData = async () => {
-    setLoading(true);
     try {
-      const [allRes, overviewRes] = await Promise.all([
-        api.get("/test-management/admin/all").catch(() => null),
-        api.get("/test-management/admin/overview").catch(() => null),
-      ]);
-
-      if (allRes?.data?.tests) {
-        const formatted = allRes.data.tests.map(({ test, setting, schedule }) => ({
+      setLoading(true);
+      const res = await api.get("/test-management/admin/all");
+      if (res.data?.tests) {
+        const formatted = res.data.tests.map(({ test, setting, schedule }) => ({
           id: test._id,
           title: test.title,
-          category: test.testType || "Aptitude",
+          category: test.category || test.testType || "Aptitude",
           status: test.status || "Draft",
-          durationMinutes: test.duration_minutes || test.durationMinutes || 30,
-          totalMarks: test.totalMarks || 10,
+          durationMinutes: test.durationMinutes || test.duration_minutes || 30,
+          totalQuestions: test.totalQuestions || 0,
+          totalMarks: test.totalMarks || 0,
           maxAttempts: test.maxAttempts || 1,
           setting,
           schedule
         }));
         setAdminTests(formatted);
-      }
 
-      if (overviewRes?.data) {
-        setOverviewStats(overviewRes.data);
+        const published = formatted.filter(t => t.status === "Published").length;
+        setOverviewStats({
+          totalExams: formatted.length,
+          publishedExams: published,
+          draftExams: formatted.length - published,
+        });
       }
+      setLoading(false);
     } catch (err) {
-      console.error("Admin fetch error:", err);
-    } finally {
+      console.error("Error fetching admin tests:", err);
+      toast.error(err.response?.data?.message || "Failed to load managed examinations");
       setLoading(false);
     }
   };
@@ -188,39 +187,6 @@ export function ExamsPage() {
       fetchAdminData();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to add question");
-    }
-  };
-
-  const handleUpdateSettings = async (e) => {
-    e.preventDefault();
-    const tId = settingsForm.testId || selectedTestId;
-    try {
-      await api.put(`/test-management/${tId}/settings`, {
-        tabSwitchLimit: Number(settingsForm.tabSwitchLimit),
-        proctoringEnabled: settingsForm.proctoringEnabled,
-        autoSubmit: settingsForm.autoSubmit
-      });
-      toast.success("Proctoring settings updated successfully!");
-      setActiveModal(null);
-      fetchAdminData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to update settings");
-    }
-  };
-
-  const handleScheduleTest = async (e) => {
-    e.preventDefault();
-    const tId = scheduleForm.testId || selectedTestId;
-    try {
-      await api.post(`/test-management/${tId}/schedule`, {
-        startAt: new Date(scheduleForm.startAt).toISOString(),
-        endAt: new Date(scheduleForm.endAt).toISOString()
-      });
-      toast.success("Test scheduled and published successfully!");
-      setActiveModal(null);
-      fetchAdminData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to schedule test");
     }
   };
 
@@ -377,7 +343,61 @@ export function ExamsPage() {
                           className="fixed inset-0 z-20"
                           onClick={() => setOpenMenuTestId(null)}
                         />
-                        <div className="absolute right-0 top-12 z-30 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 text-xs text-slate-700 font-semibold space-y-1">
+                        <div className="absolute right-0 top-12 z-30 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 text-xs text-slate-700 font-semibold space-y-1">
+                          <button
+                            onClick={() => {
+                              setOpenMenuTestId(null);
+                              setStudioTest(t);
+                              setStudioInitialTab("examRules");
+                              setStudioOpen(true);
+                            }}
+                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-indigo-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                          >
+                            <Sliders size={15} className="text-indigo-600" />
+                            <span>Configuration Studio</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setOpenMenuTestId(null);
+                              setStudioTest(t);
+                              setStudioInitialTab("proctoring");
+                              setStudioOpen(true);
+                            }}
+                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-amber-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                          >
+                            <ShieldCheck size={15} className="text-amber-600" />
+                            <span>Anti-Cheat & Proctoring</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setOpenMenuTestId(null);
+                              setStudioTest(t);
+                              setStudioInitialTab("targeting");
+                              setStudioOpen(true);
+                            }}
+                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-emerald-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                          >
+                            <Building2 size={15} className="text-emerald-600" />
+                            <span>Department Targeting</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setOpenMenuTestId(null);
+                              setStudioTest(t);
+                              setStudioInitialTab("schedule");
+                              setStudioOpen(true);
+                            }}
+                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-blue-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                          >
+                            <Calendar size={15} className="text-blue-600" />
+                            <span>Schedule & Publishing</span>
+                          </button>
+
+                          <div className="border-t border-slate-100 my-1"></div>
+
                           <button
                             onClick={() => {
                               setOpenMenuTestId(null);
@@ -387,38 +407,8 @@ export function ExamsPage() {
                             }}
                             className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
                           >
-                            <HelpCircle size={15} className="text-emerald-600" />
+                            <HelpCircle size={15} className="text-slate-600" />
                             <span>Add Question Item</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setOpenMenuTestId(null);
-                              setSelectedTestId(t.id);
-                              setSettingsForm(prev => ({ ...prev, testId: t.id }));
-                              setActiveModal("settings");
-                            }}
-                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
-                          >
-                            <Settings size={15} className="text-amber-600" />
-                            <span>Proctoring & Policy Rules</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setOpenMenuTestId(null);
-                              setSelectedTestId(t.id);
-                              setScheduleForm({
-                                testId: t.id,
-                                startAt: t.schedule?.startAt ? formatForDateTimeLocal(t.schedule.startAt) : formatForDateTimeLocal(new Date()),
-                                endAt: t.schedule?.endAt ? formatForDateTimeLocal(t.schedule.endAt) : formatForDateTimeLocal(new Date(Date.now() + 3600000))
-                              });
-                              setActiveModal("schedule");
-                            }}
-                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
-                          >
-                            <Calendar size={15} className="text-indigo-600" />
-                            <span>Schedule Timestamp Window</span>
                           </button>
 
                           {t.status === "Published" && (
@@ -445,7 +435,16 @@ export function ExamsPage() {
           )}
         </div>
 
-        {/* Quick Action Modals */}
+        {/* Enterprise Full Exam Settings Studio Modal */}
+        <ExamSettingsStudioModal
+          isOpen={studioOpen}
+          onClose={() => setStudioOpen(false)}
+          testData={studioTest}
+          onSaved={fetchAdminData}
+          initialTab={studioInitialTab}
+        />
+
+        {/* Quick Action Modal: Add Question */}
         {activeModal === "addQuestion" && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl my-8">
@@ -503,79 +502,6 @@ export function ExamsPage() {
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                   <button type="button" onClick={() => setActiveModal(null)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold">Cancel</button>
                   <button type="submit" className="px-5 py-2.5 rounded-xl text-white font-semibold" style={{ background: BRAND }}>Add Question</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {activeModal === "settings" && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl">
-              <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
-                <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>Edit Security Settings</h3>
-                <button onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
-              </div>
-              <form onSubmit={handleUpdateSettings} className="space-y-4 text-sm">
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Max Tab Switch Limit</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={settingsForm.tabSwitchLimit}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, tabSwitchLimit: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl"
-                  />
-                </div>
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
-                  <span className="font-semibold text-gray-700">Strict Proctoring Mode</span>
-                  <input
-                    type="checkbox"
-                    checked={settingsForm.proctoringEnabled}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, proctoringEnabled: e.target.checked })}
-                    className="w-4 h-4 text-indigo-600 rounded"
-                  />
-                </div>
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                  <button type="button" onClick={() => setActiveModal(null)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold">Cancel</button>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl text-white font-semibold" style={{ background: BRAND }}>Save Settings</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {activeModal === "schedule" && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl">
-              <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
-                <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>Schedule & Publish Exam</h3>
-                <button onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
-              </div>
-              <form onSubmit={handleScheduleTest} className="space-y-4 text-sm">
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Start Time *</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={scheduleForm.startAt}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, startAt: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">End Time *</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={scheduleForm.endAt}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, endAt: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl"
-                  />
-                </div>
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                  <button type="button" onClick={() => setActiveModal(null)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold">Cancel</button>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl text-white font-semibold bg-emerald-600 hover:bg-emerald-700">Schedule & Publish</button>
                 </div>
               </form>
             </div>
