@@ -241,7 +241,7 @@ export function ExamsPage() {
             className="flex items-center justify-center gap-2 text-white font-semibold px-5 py-3 rounded-xl hover:opacity-90 transition-opacity shadow-sm shrink-0 cursor-pointer text-sm"
             style={{ background: BRAND }}
           >
-            <Plus size={18} /> Launch Test Provisioning Pipeline
+            <Plus size={18} /> Create Examination
           </button>
         </div>
 
@@ -294,7 +294,7 @@ export function ExamsPage() {
             <div className="text-center py-12 text-gray-500 bg-slate-50 rounded-xl border border-slate-200">
               <FileText size={40} className="mx-auto text-gray-300 mb-3" />
               <p className="font-semibold text-gray-700">No exams created yet.</p>
-              <p className="text-xs text-gray-400 mt-1">Click "Launch Test Provisioning Pipeline" above to create your first assessment.</p>
+              <p className="text-xs text-gray-400 mt-1">Click "Create Examination" above to create your first assessment.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -346,7 +346,7 @@ export function ExamsPage() {
                         className="text-xs font-bold px-4 py-2.5 rounded-xl text-white shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
                         style={{ background: BRAND }}
                       >
-                        <Layers size={14} /> Launch Pipeline
+                        <Layers size={14} /> Configure Pipeline
                       </button>
                     )}
 
@@ -371,18 +371,6 @@ export function ExamsPage() {
                           onClick={() => setOpenMenuTestId(null)}
                         />
                         <div className="absolute right-0 top-12 z-30 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 text-xs text-slate-700 font-semibold space-y-1">
-                          <button
-                            onClick={() => {
-                              setOpenMenuTestId(null);
-                              setWizardInitialTestId(t.id);
-                              setIsWizardOpen(true);
-                            }}
-                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
-                          >
-                            <Layers size={15} className="text-red-600" />
-                            <span>Setup & Pipeline Studio</span>
-                          </button>
-                          
                           <button
                             onClick={() => {
                               setOpenMenuTestId(null);
