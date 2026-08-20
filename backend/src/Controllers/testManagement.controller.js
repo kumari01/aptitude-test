@@ -126,24 +126,144 @@ async function computeTestMetadata(testDoc) {
     };
 }
 
-// List ALL tests (admin dashboard view) with settings & schedules
+// Ultra-fast Parallel Batch Fetch for Tests, Settings, Schedules & Attempts (Eliminates N+1 query lag)
+async function batchFetchDetailedTests(testDocs, studentId = null) {
+    if (!testDocs || testDocs.length === 0) return [];
+    const testIds = testDocs.map(t => t._id);
+
+    const Question = require("../model/question.model");
+
+    // Fetch all related collections in parallel in single network roundtrips
+    const [
+        settingsList,
+        schedulesList,
+        attemptsList,
+        directQuestions,
+        sectionsList
+    ] = await Promise.all([
+        TestSetting.find({ testId: { $in: testIds } }),
+        TestSchedule.find({ testId: { $in: testIds } }).sort({ createdAt: -1 }),
+        studentId ? ExamAttempt.find({
+            $or: [{ testId: { $in: testIds } }, { exam_id: { $in: testIds } }],
+            student_id: studentId
+        }).sort({ createdAt: -1 }) : Promise.resolve([]),
+        Question.find({ $or: [{ testId: { $in: testIds } }, { exam_id: { $in: testIds } }] }),
+        Section.find({ testId: { $in: testIds } })
+    ]);
+
+    const sectionIds = sectionsList.map(s => s._id);
+    const sectionQuestions = sectionIds.length > 0
+        ? await SectionQuestion.find({ sectionId: { $in: sectionIds } })
+        : [];
+
+    // O(1) in-memory maps
+    const settingsMap = new Map();
+    settingsList.forEach(s => {
+        if (s.testId) settingsMap.set(s.testId.toString(), s);
+    });
+
+    const schedulesMap = new Map();
+    schedulesList.forEach(sc => {
+        if (sc.testId) {
+            const idStr = sc.testId.toString();
+            if (!schedulesMap.has(idStr)) schedulesMap.set(idStr, sc);
+        }
+    });
+
+    const attemptsMap = new Map();
+    attemptsList.forEach(att => {
+        const tIdStr = (att.testId || att.exam_id)?.toString();
+        if (tIdStr && !attemptsMap.has(tIdStr)) {
+            attemptsMap.set(tIdStr, att);
+        }
+    });
+
+    const directQuestionsMap = new Map();
+    directQuestions.forEach(q => {
+        const tIdStr = (q.testId || q.exam_id)?.toString();
+        if (tIdStr) {
+            if (!directQuestionsMap.has(tIdStr)) directQuestionsMap.set(tIdStr, []);
+            directQuestionsMap.get(tIdStr).push(q);
+        }
+    });
+
+    const secQuestionsMap = new Map();
+    sectionQuestions.forEach(sq => {
+        if (sq.sectionId) {
+            const sIdStr = sq.sectionId.toString();
+            if (!secQuestionsMap.has(sIdStr)) secQuestionsMap.set(sIdStr, []);
+            secQuestionsMap.get(sIdStr).push(sq);
+        }
+    });
+
+    const sectionsMap = new Map();
+    sectionsList.forEach(s => {
+        if (s.testId) {
+            const tIdStr = s.testId.toString();
+            if (!sectionsMap.has(tIdStr)) sectionsMap.set(tIdStr, []);
+            sectionsMap.get(tIdStr).push(s);
+        }
+    });
+
+    return testDocs.map(testDoc => {
+        const tIdStr = testDoc._id.toString();
+        const dQuestions = directQuestionsMap.get(tIdStr) || [];
+        const tSections = sectionsMap.get(tIdStr) || [];
+
+        let totalSectionQuestions = 0;
+        let totalSectionMarks = 0;
+        for (const sec of tSections) {
+            const sqList = secQuestionsMap.get(sec._id.toString()) || [];
+            const secMarks = sqList.reduce((sum, sq) => sum + (sq.marks || 1), 0);
+            totalSectionQuestions += sqList.length;
+            totalSectionMarks += (sec.totalMarks || secMarks || 0);
+        }
+
+        const totalDirectMarks = dQuestions.reduce((sum, q) => sum + (q.marks || 1), 0);
+        const calculatedQuestions = Math.max(testDoc.totalQuestions || 0, dQuestions.length, totalSectionQuestions);
+        const finalTotalMarks = testDoc.totalMarks || totalDirectMarks || totalSectionMarks || (calculatedQuestions > 0 ? calculatedQuestions : 10);
+        const passingMarks = testDoc.passingMarks || Math.ceil(finalTotalMarks * 0.4);
+        const duration = testDoc.durationMinutes || testDoc.duration_minutes || 30;
+
+        const computed = {
+            _id: testDoc._id,
+            title: testDoc.title,
+            description: testDoc.description || "",
+            category: testDoc.category || testDoc.testType || "Aptitude",
+            testType: testDoc.testType || testDoc.category || "Aptitude",
+            durationMinutes: duration,
+            duration_minutes: duration,
+            totalQuestions: calculatedQuestions,
+            totalMarks: finalTotalMarks,
+            passingMarks: passingMarks,
+            status: testDoc.status || "Draft",
+            maxAttempts: testDoc.maxAttempts || 1,
+            createdAt: testDoc.createdAt,
+            updatedAt: testDoc.updatedAt
+        };
+
+        const attempt = attemptsMap.get(tIdStr);
+
+        return {
+            test: computed,
+            setting: settingsMap.get(tIdStr) || null,
+            schedule: schedulesMap.get(tIdStr) || null,
+            attempt: attempt ? {
+                _id: attempt._id,
+                status: attempt.status,
+                score: attempt.score,
+                started_at: attempt.started_at,
+                completed_at: attempt.completed_at
+            } : null
+        };
+    });
+}
+
+// List ALL tests (admin dashboard view) with settings & schedules (Batch Optimized)
 const listAllTests = async (req, res) => {
     try {
         const tests = await Test.find().sort({ createdAt: -1 });
-
-        const detailedTests = [];
-        for (const t of tests) {
-            const setting = await TestSetting.findOne({ testId: t._id });
-            const schedule = await TestSchedule.findOne({ testId: t._id }).sort({ createdAt: -1 });
-            const computed = await computeTestMetadata(t);
-
-            detailedTests.push({
-                test: computed,
-                setting,
-                schedule
-            });
-        }
-
+        const detailedTests = await batchFetchDetailedTests(tests);
         res.status(200).json({ tests: detailedTests });
     } catch (err) {
         console.error("Error listing all tests:", err);
@@ -422,32 +542,9 @@ const listStudentAssignedTests = async (req, res) => {
             testQuery._id = { $in: combinedIds };
         }
 
-        // Return latest exams first
+        // Return latest exams first (Batch Optimized)
         const tests = await Test.find(testQuery).sort({ createdAt: -1 });
-        const detailedTests = [];
-        for (const t of tests) {
-            const setting = await TestSetting.findOne({ testId: t._id });
-            const schedule = await TestSchedule.findOne({ testId: t._id }).sort({ createdAt: -1 });
-            const attempt = await ExamAttempt.findOne({
-                $or: [{ testId: t._id }, { exam_id: t._id }],
-                student_id: student._id
-            }).sort({ createdAt: -1 });
-
-            const computed = await computeTestMetadata(t);
-
-            detailedTests.push({
-                test: computed,
-                setting,
-                schedule,
-                attempt: attempt ? {
-                    _id: attempt._id,
-                    status: attempt.status,
-                    score: attempt.score,
-                    started_at: attempt.started_at,
-                    completed_at: attempt.completed_at
-                } : null
-            });
-        }
+        const detailedTests = await batchFetchDetailedTests(tests, student._id);
 
         res.status(200).json({ tests: detailedTests });
     } catch (err) {
