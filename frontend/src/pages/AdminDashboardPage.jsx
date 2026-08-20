@@ -20,7 +20,9 @@ import {
   Sparkles,
   LayoutGrid,
   List,
-  RotateCcw
+  RotateCcw,
+  ShieldCheck,
+  X
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
@@ -45,18 +47,24 @@ export function AdminDashboardPage() {
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // "all" | "passed" | "failed" | "in_progress" | "disqualified"
 
-  const handleReauthorizeStudent = async (attemptId, studentName) => {
-    if (!window.confirm(`Are you sure you want to re-authorize ${studentName || "this candidate"}? This will clear their disqualified attempt record and permit them to retake the examination.`)) {
-      return;
-    }
+  // Re-Authorization Confirmation Modal State
+  const [reauthCandidate, setReauthCandidate] = useState(null);
+  const [isReauthorizing, setIsReauthorizing] = useState(false);
+
+  const confirmReauthorize = async () => {
+    if (!reauthCandidate?.attemptId) return;
+    setIsReauthorizing(true);
     try {
-      await api.post(`/test-management/admin/attempts/${attemptId}/reauthorize`);
-      toast.success(`Successfully re-authorized ${studentName || "student"}. They can now write the exam.`);
-      // Remove or reset attempt in local attempts state
-      setAttempts(prev => prev.filter(a => a.id !== attemptId && a._id !== attemptId));
+      await api.post(`/test-management/admin/attempts/${reauthCandidate.attemptId}/reauthorize`);
+      toast.success(`Successfully re-authorized ${reauthCandidate.studentName || "candidate"}. They can now write the exam.`);
+      // Remove attempt in local attempts state so UI updates instantly
+      setAttempts(prev => prev.filter(a => a.id !== reauthCandidate.attemptId && a._id !== reauthCandidate.attemptId));
+      setReauthCandidate(null);
     } catch (err) {
       console.error("Failed to re-authorize candidate:", err);
       toast.error(err.response?.data?.message || "Failed to re-authorize candidate");
+    } finally {
+      setIsReauthorizing(false);
     }
   };
 
@@ -380,9 +388,18 @@ export function AdminDashboardPage() {
                         {att.status === "Disqualified" || att.status === "Auto Submitted" || att.status === "Time Expired" || (att.violations > 0 && (att.score ?? 0) < 40) ? (
                           <button
                             type="button"
-                            onClick={() => handleReauthorizeStudent(att.id || att._id, att.studentName)}
+                            onClick={() => setReauthCandidate({
+                              attemptId: att.id || att._id,
+                              studentName: att.studentName,
+                              rollNumber: att.rollNumber,
+                              department: att.department,
+                              examTitle: t.title,
+                              violations: att.violations ?? att.tabSwitches ?? 0,
+                              riskScore: att.riskScore ?? 0,
+                              score: att.score ?? 0
+                            })}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
-                            title="Reset violations & allow this student to retake the exam"
+                            title="Reset violations & allow this candidate to retake the exam"
                           >
                             <RotateCcw size={12} /> Allow Retake
                           </button>
@@ -399,6 +416,90 @@ export function AdminDashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Re-Authorization Warning Confirmation Popup Modal */}
+        {reauthCandidate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-scale-up space-y-5">
+              {/* Header with Warning Shield Badge */}
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0 text-amber-600 shadow-sm">
+                  <AlertTriangle size={24} />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-slate-900" style={{ fontFamily: FONT_DISPLAY }}>
+                    Re-Authorize Candidate Attempt?
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    This action will reset previous proctoring violations and unlock the examination for this candidate.
+                  </p>
+                </div>
+              </div>
+
+              {/* Candidate Details Card */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Candidate Name:</span>
+                  <span className="font-bold text-slate-900">{reauthCandidate.studentName || "Student"}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Roll Number:</span>
+                  <span className="font-mono font-bold text-slate-800">{reauthCandidate.rollNumber || "—"}</span>
+                </div>
+                {reauthCandidate.department && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Department:</span>
+                    <span className="font-bold text-slate-700">{reauthCandidate.department}</span>
+                  </div>
+                )}
+                {reauthCandidate.examTitle && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Examination:</span>
+                    <span className="font-bold text-indigo-700 truncate max-w-[200px]">{reauthCandidate.examTitle}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Warning Notice Banner */}
+              <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl text-[11px] text-amber-900 flex items-start gap-2.5">
+                <ShieldCheck size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">What happens next:</span> The candidate's flagged attempt will be reset. They can immediately log into their portal and take the exam fresh under standard proctoring rules.
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isReauthorizing}
+                  onClick={() => setReauthCandidate(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  No, Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isReauthorizing}
+                  onClick={confirmReauthorize}
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isReauthorizing ? (
+                    <>
+                      <RotateCcw size={14} className="animate-spin" />
+                      Re-Authorizing...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw size={14} />
+                      Yes, Authorize Retake
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
