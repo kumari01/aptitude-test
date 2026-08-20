@@ -24,6 +24,13 @@ import CreateTestWizardModal from "../components/admin/CreateTestWizardModal";
 import LiveProctoringMonitorModal from "../components/admin/LiveProctoringMonitorModal";
 import { ExamsSkeleton, StudentExamsSkeleton, AdminExamsSkeleton } from "../components/skeletons";
 
+const formatForDateTimeLocal = (dateInput) => {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  if (isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export function ExamsPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -70,8 +77,8 @@ export function ExamsPage() {
 
   const [scheduleForm, setScheduleForm] = useState({
     testId: "",
-    startAt: new Date().toISOString().slice(0, 16),
-    endAt: new Date(Date.now() + 86400000).toISOString().slice(0, 16)
+    startAt: formatForDateTimeLocal(new Date()),
+    endAt: formatForDateTimeLocal(new Date(Date.now() + 3600000))
   });
 
   useEffect(() => {
@@ -401,7 +408,11 @@ export function ExamsPage() {
                             onClick={() => {
                               setOpenMenuTestId(null);
                               setSelectedTestId(t.id);
-                              setScheduleForm(prev => ({ ...prev, testId: t.id }));
+                              setScheduleForm({
+                                testId: t.id,
+                                startAt: t.schedule?.startAt ? formatForDateTimeLocal(t.schedule.startAt) : formatForDateTimeLocal(new Date()),
+                                endAt: t.schedule?.endAt ? formatForDateTimeLocal(t.schedule.endAt) : formatForDateTimeLocal(new Date(Date.now() + 3600000))
+                              });
                               setActiveModal("schedule");
                             }}
                             className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
@@ -598,66 +609,82 @@ export function ExamsPage() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
-          {assignedExams.map((e) => (
-            <div key={e.id} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span
-                    className="text-[11px] font-bold tracking-wide px-2.5 py-1 rounded-full"
-                    style={{ background: e.live ? BRAND : "#F3F4F6", color: e.live ? "#fff" : "#6B7280" }}
-                  >
-                    {e.live ? "LIVE NOW" : e.category.toUpperCase()}
-                  </span>
-                  {e.proctoring && (
-                    <span className="flex items-center gap-1 text-xs text-amber-600 font-semibold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
-                      <ShieldAlert size={12} /> Proctoring Enabled
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3" style={{ fontFamily: FONT_DISPLAY }}>
-                  {e.title}
-                </h3>
-                <div className="flex flex-wrap items-center gap-4 text-gray-500 text-sm mb-5">
-                  <span className="flex items-center gap-1.5">
-                    <FileText size={14} /> {e.questions} questions
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Clock size={14} /> {e.minutes} minutes
-                  </span>
-                  {e.tabSwitchLimit && (
-                    <span className="text-xs text-gray-400">
-                      Max {e.tabSwitchLimit} Tab Switches
-                    </span>
-                  )}
-                </div>
-              </div>
+          {assignedExams.map((e) => {
+            const now = new Date();
+            const isUpcoming = e.startAt ? now < new Date(e.startAt) : false;
+            const isExpired = e.endAt ? now > new Date(e.endAt) : false;
 
-              {["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(e.attemptStatus) ? (
-                <button
-                  onClick={() => navigate(`/exams/${e.id}/result`, { state: { attemptId: e.attemptId, disqualified: e.attemptStatus === "Auto Submitted" || e.attemptStatus === "Disqualified" } })}
-                  className="w-full flex items-center justify-center gap-2 bg-slate-800 text-white font-semibold py-3 rounded-xl hover:bg-slate-900 transition-opacity"
-                >
-                  View Result <ArrowRight size={15} />
-                </button>
-              ) : e.attemptStatus === "Started" ? (
-                <button
-                  onClick={() => handleStartExam(e.id)}
-                  className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"
-                  style={{ background: BRAND }}
-                >
-                  Resume Exam <ArrowRight size={15} />
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleStartExam(e.id)}
-                  className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"
-                  style={{ background: INK }}
-                >
-                  {e.live ? "Take Exam" : "Start Practice"} <ArrowRight size={15} />
-                </button>
-              )}
-            </div>
-          ))}
+            return (
+              <div key={e.id} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span
+                      className={`text-[11px] font-bold tracking-wide px-2.5 py-1 rounded-full ${
+                        isUpcoming ? "bg-amber-100 text-amber-800" : e.live ? "bg-red-600 text-white" : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {isUpcoming ? "UPCOMING" : e.live ? "LIVE NOW" : e.category.toUpperCase()}
+                    </span>
+                    {e.proctoring && (
+                      <span className="flex items-center gap-1 text-xs text-amber-600 font-semibold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
+                        <ShieldAlert size={12} /> Proctoring Enabled
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3" style={{ fontFamily: FONT_DISPLAY }}>
+                    {e.title}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-4 text-gray-500 text-sm mb-5">
+                    <span className="flex items-center gap-1.5">
+                      <FileText size={14} /> {e.questions} questions
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Clock size={14} /> {e.minutes} minutes
+                    </span>
+                  </div>
+                </div>
+
+                {["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(e.attemptStatus) ? (
+                  <button
+                    onClick={() => navigate(`/exams/${e.id}/result`, { state: { attemptId: e.attemptId, disqualified: e.attemptStatus === "Auto Submitted" || e.attemptStatus === "Disqualified" } })}
+                    className="w-full flex items-center justify-center gap-2 bg-slate-800 text-white font-semibold py-3 rounded-xl hover:bg-slate-900 transition-opacity"
+                  >
+                    View Result <ArrowRight size={15} />
+                  </button>
+                ) : e.attemptStatus === "Started" ? (
+                  <button
+                    onClick={() => handleStartExam(e.id)}
+                    className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"
+                    style={{ background: BRAND }}
+                  >
+                    Resume Exam <ArrowRight size={15} />
+                  </button>
+                ) : isUpcoming ? (
+                  <button
+                    disabled
+                    className="w-full flex items-center justify-center gap-2 text-amber-900 bg-amber-100 font-semibold py-3 rounded-xl cursor-not-allowed text-xs"
+                  >
+                    Starts at {new Date(e.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </button>
+                ) : isExpired ? (
+                  <button
+                    disabled
+                    className="w-full flex items-center justify-center gap-2 text-slate-500 bg-slate-100 font-semibold py-3 rounded-xl cursor-not-allowed text-xs"
+                  >
+                    Exam Schedule Ended
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleStartExam(e.id)}
+                    className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"
+                    style={{ background: INK }}
+                  >
+                    {e.live ? "Take Exam" : "Start Practice"} <ArrowRight size={15} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

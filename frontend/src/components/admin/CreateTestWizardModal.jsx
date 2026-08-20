@@ -60,6 +60,13 @@ const SAMPLE_JSON_BANK = [
   }
 ];
 
+const formatForDateTimeLocal = (dateInput) => {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  if (isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished, initialTestId = null }) {
   const toast = useToast();
   const [currentStep, setCurrentStep] = useState(1);
@@ -98,8 +105,8 @@ export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished
 
   // Form State Step 4: Schedule
   const [scheduleForm, setScheduleForm] = useState({
-    startAt: new Date(Date.now() + 300000).toISOString().slice(0, 16), // 5 mins from now
-    endAt: new Date(Date.now() + 86400000).toISOString().slice(0, 16) // +24 hours
+    startAt: formatForDateTimeLocal(new Date(Date.now() + 300000)), // 5 mins from now
+    endAt: formatForDateTimeLocal(new Date(Date.now() + 3900000)) // +1 hr 5 mins
   });
 
   // Published Test Summary for Step 5
@@ -137,6 +144,12 @@ export default function CreateTestWizardModal({ isOpen, onClose, onTestPublished
             targetType: res.data.target.targetType || "All",
             selectedDepartments: res.data.target.departments || []
           }));
+        }
+        if (res.data.schedule) {
+          setScheduleForm({
+            startAt: formatForDateTimeLocal(res.data.schedule.startAt),
+            endAt: formatForDateTimeLocal(res.data.schedule.endAt)
+          });
         }
       }
     } catch (err) {

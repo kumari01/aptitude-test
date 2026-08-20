@@ -311,6 +311,7 @@ const getTestDetails = async (req, res) => {
         const Question = require("../model/question.model");
 
         const setting = await TestSetting.findOne({ testId });
+        const schedule = await TestSchedule.findOne({ testId }).sort({ createdAt: -1 });
         const sections = await Section.find({ testId }).sort({ displayOrder: 1 });
 
         // Query direct questions from Question model
@@ -356,6 +357,7 @@ const getTestDetails = async (req, res) => {
         res.status(200).json({
             test: testData,
             setting,
+            schedule,
             sections: sectionDetails,
             totalQuestions: calculatedQuestions
         });

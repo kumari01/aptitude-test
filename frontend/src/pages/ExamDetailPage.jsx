@@ -12,6 +12,7 @@ export function ExamDetailPage() {
   const navigate = useNavigate();
   const [exam, setExam] = useState({ title: "Loading...", category: "Aptitude", minutes: 30, totalMarks: 0 });
   const [setting, setSetting] = useState(null);
+  const [schedule, setSchedule] = useState(null);
   const [sections, setSections] = useState([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -36,7 +37,7 @@ export function ExamDetailPage() {
         }
 
         if (res.data?.test) {
-          const { test: testData, setting: setObj, sections: secList, totalQuestions } = res.data;
+          const { test: testData, setting: setObj, schedule: schedObj, sections: secList, totalQuestions } = res.data;
           const qCount = typeof totalQuestions === 'number' ? totalQuestions : (testData.totalQuestions || (secList ? secList.reduce((sum, sec) => sum + (sec.questionCount || 0), 0) : 0));
           const tMarks = testData.totalMarks || (qCount > 0 ? qCount * 1 : 10);
           const pMarks = testData.passingMarks || Math.ceil(tMarks * 0.4);
@@ -52,6 +53,7 @@ export function ExamDetailPage() {
 
           setQuestionCount(qCount);
           if (setObj) setSetting(setObj);
+          if (schedObj) setSchedule(schedObj);
           if (secList) setSections(secList);
         }
         setLoading(false);
@@ -88,7 +90,14 @@ export function ExamDetailPage() {
     );
   }
 
+  const isUpcoming = schedule?.startAt ? new Date() < new Date(schedule.startAt) : false;
+  const isExpired = schedule?.endAt ? new Date() > new Date(schedule.endAt) : false;
+
   const handleBeginExam = () => {
+    if (isUpcoming) {
+      toast.warning("Exam has not started yet. Please wait until scheduled start time.");
+      return;
+    }
     setShowFullscreenPopup(true);
   };
 
@@ -125,7 +134,7 @@ export function ExamDetailPage() {
           </span>
           {setting?.proctoringEnabled && (
             <span className="flex items-center gap-1 text-xs font-semibold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100">
-              <ShieldAlert size={13} /> Proctoring Enabled (Max {setting.tabSwitchLimit || 3} Tab Switches)
+              <ShieldAlert size={13} /> Strict Proctoring Enabled
             </span>
           )}
         </div>
@@ -184,7 +193,7 @@ export function ExamDetailPage() {
             `Total duration is ${exam.minutes} minutes. The timer will start once you begin.`,
             `Each question carries marks according to difficulty.`,
             `Passing score is 40% of total marks.`,
-            setting?.proctoringEnabled ? `Proctoring is active. Switching tabs more than ${setting.tabSwitchLimit || 3} times will auto-submit the exam.` : "No tab switch restrictions for this practice test.",
+            setting?.proctoringEnabled ? "Strict proctoring is active. Navigating away or exiting fullscreen will result in auto-submission and disqualification." : "No tab switch restrictions for this practice test.",
             "You can navigate between questions using the palette or navigation buttons.",
             "The exam will auto-submit when the timer runs out.",
             "Do not refresh or close the browser during the exam.",
@@ -212,6 +221,23 @@ export function ExamDetailPage() {
         >
           Resume Exam <ArrowRight size={16} />
         </button>
+      ) : isUpcoming ? (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-amber-50 border border-amber-200 rounded-2xl p-4 gap-3">
+          <div className="text-amber-900 text-xs">
+            <strong>Exam Not Open Yet:</strong> Scheduled to start at{" "}
+            <strong>{new Date(schedule.startAt).toLocaleString()}</strong>
+          </div>
+          <button
+            disabled
+            className="flex items-center gap-2 text-amber-800 bg-amber-200/70 font-semibold px-6 py-3 rounded-xl cursor-not-allowed text-sm"
+          >
+            Starts {new Date(schedule.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </button>
+        </div>
+      ) : isExpired ? (
+        <div className="bg-slate-100 border border-slate-200 rounded-2xl p-4 text-slate-600 text-xs font-semibold">
+          Exam Schedule Window Has Closed
+        </div>
       ) : (
         <button
           onClick={handleBeginExam}
