@@ -12,21 +12,31 @@
  * @param {HTMLElement} [element=document.documentElement] - Element to make fullscreen.
  * @returns {Promise<void>} Resolves when fullscreen is active, rejects on failure.
  */
-export function requestFullscreen(element = document.documentElement) {
-  if (!element) {
+export function requestFullscreen(element) {
+  const target = element || document.documentElement || document.body;
+  if (!target) {
     return Promise.reject(new Error("No element provided for fullscreen request"));
   }
 
   const methods = [
     "requestFullscreen",
     "webkitRequestFullscreen",
+    "webkitRequestFullScreen",
     "mozRequestFullScreen",
     "msRequestFullscreen",
   ];
 
   for (const method of methods) {
-    if (element[method]) {
-      return Promise.resolve(element[method].call(element));
+    if (typeof target[method] === "function") {
+      try {
+        const res = target[method].call(target);
+        if (res && typeof res.then === "function") {
+          return res;
+        }
+        return Promise.resolve();
+      } catch (err) {
+        return Promise.reject(err);
+      }
     }
   }
 
@@ -41,6 +51,15 @@ export function requestFullscreen(element = document.documentElement) {
 export function exitFullscreen() {
   const doc = window.document;
 
+  if (
+    !doc.fullscreenElement &&
+    !doc.webkitFullscreenElement &&
+    !doc.mozFullScreenElement &&
+    !doc.msFullscreenElement
+  ) {
+    return Promise.resolve();
+  }
+
   const methods = [
     "exitFullscreen",
     "webkitExitFullscreen",
@@ -49,12 +68,17 @@ export function exitFullscreen() {
   ];
 
   for (const method of methods) {
-    if (doc[method]) {
-      return Promise.resolve(doc[method].call(doc));
+    if (typeof doc[method] === "function") {
+      try {
+        const res = doc[method].call(doc);
+        return Promise.resolve(res).catch(() => {});
+      } catch (e) {
+        return Promise.resolve();
+      }
     }
   }
 
-  return Promise.reject(new Error("Fullscreen API is not supported by this browser"));
+  return Promise.resolve();
 }
 
 /**

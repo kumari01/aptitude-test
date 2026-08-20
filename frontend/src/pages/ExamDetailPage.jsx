@@ -97,12 +97,10 @@ export function ExamDetailPage() {
     setShowFullscreenPopup(false);
     try {
       await requestFullscreen();
-      navigate(`/exams/${examId}/take`);
     } catch (err) {
-      toast.error(
-        "Unable to enter fullscreen mode. Please allow fullscreen permission and try again."
-      );
+      console.warn("Fullscreen permission note:", err);
     }
+    navigate(`/exams/${examId}/take`);
   };
 
   const declineFullscreen = () => {

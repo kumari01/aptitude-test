@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Clock, Flag, ChevronLeft, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
+import { 
+  Clock, Flag, ChevronLeft, ChevronRight, AlertCircle, Loader2, 
+  Bookmark, BookmarkCheck, RotateCcw, LayoutGrid, X, Check, Eye, Maximize2 
+} from "lucide-react";
 import { formatTime } from "../utils/formatters";
 import { BRAND, BRAND_TINT, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
 import { useToast } from "../context/ToastContext";
@@ -19,8 +22,13 @@ export function ExamTakingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState({});
+  const [markedForReview, setMarkedForReview] = useState({});
+  const [visited, setVisited] = useState({ 0: true });
+  const [paletteDrawerOpen, setPaletteDrawerOpen] = useState(false);
+  const [paletteFilter, setPaletteFilter] = useState("all"); // "all" | "answered" | "marked" | "unanswered"
   const [seconds, setSeconds] = useState(1800);
   const timerRef = useRef(null);
+  const targetEndTimeRef = useRef(null);
 
   // Proctoring States
   const [proctoringSessionId, setProctoringSessionId] = useState(null);
@@ -107,8 +115,8 @@ export function ExamTakingPage() {
     setWarningModal(null);
     setModalCountdown(10);
     isWarningActiveRef.current = false;
-    // 3-second grace period after modal dismissal so refocusing/fullscreen doesn't trigger repeat violations
-    warningGraceUntilRef.current = Date.now() + 3000;
+    // 1.5-second grace period after modal dismissal so refocusing doesn't trigger repeat violations
+    warningGraceUntilRef.current = Date.now() + 1500;
 
     // Automatically re-trigger fullscreen on acknowledgement click if exited
     if (!isFullscreen()) {
@@ -270,14 +278,18 @@ export function ExamTakingPage() {
             setProctoringEnabled(true);
           }
 
-          // Calculate remaining duration based on start time (30 min default)
+          // Calculate remaining duration and set absolute target end time
+          const totalMinutes = examData?.durationMinutes || examData?.minutes || 30;
+          const totalDurationMs = totalMinutes * 60 * 1000;
+          let targetEnd = Date.now() + totalDurationMs;
+
           if (attempt?.started_at) {
             const startTime = new Date(attempt.started_at).getTime();
-            const totalDurationMs = 30 * 60 * 1000;
-            const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
-            const remaining = Math.max(0, Math.floor(totalDurationMs / 1000) - elapsedSeconds);
-            setSeconds(remaining);
+            targetEnd = startTime + totalDurationMs;
           }
+          targetEndTimeRef.current = targetEnd;
+          const remaining = Math.max(0, Math.ceil((targetEnd - Date.now()) / 1000));
+          setSeconds(remaining);
 
           // Fetch pre-saved answers if resuming attempt
           if (attempt?._id) {
@@ -316,6 +328,13 @@ export function ExamTakingPage() {
 
     initExam();
   }, [examId]);
+
+  // Automatically request fullscreen mode once exam is ready
+  useEffect(() => {
+    if (!loading && !isFullscreen()) {
+      requestFullscreen().catch(() => {});
+    }
+  }, [loading]);
 
   const finishExam = async () => {
     if (submitting) return;
@@ -434,11 +453,7 @@ export function ExamTakingPage() {
 
     const handleFullscreenChange = () => {
       if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
-      const isFull = document.fullscreenElement ||
-        document.webkitFullscreenElement ||
-        document.mozFullScreenElement ||
-        document.msFullscreenElement;
-      if (!isFull) {
+      if (!isFullscreen()) {
         logProctoringEvent("FULLSCREEN_EXIT");
       }
     };
@@ -447,11 +462,11 @@ export function ExamTakingPage() {
     const handleResize = () => {
       if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
       const now = Date.now();
-      if (now - lastResizeTime < 2000) return;
+      if (now - lastResizeTime < 1500) return;
 
-      const thresholdWidth = screen.width - 60;
-      const thresholdHeight = screen.height - 60;
-      if (window.outerWidth < thresholdWidth || window.outerHeight < thresholdHeight) {
+      const thresholdWidth = screen.width - 50;
+      const thresholdHeight = screen.height - 50;
+      if (!isFullscreen() || window.outerWidth < thresholdWidth || window.outerHeight < thresholdHeight) {
         lastResizeTime = now;
         logProctoringEvent("FULLSCREEN_EXIT");
       }
@@ -494,24 +509,68 @@ export function ExamTakingPage() {
   }, [proctoringEnabled, proctoringSessionId, attemptId]);
 
   useEffect(() => {
-    timerRef.current = setInterval(() => {
-      setSeconds((s) => {
-        if (s <= 1) {
-          clearInterval(timerRef.current);
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timerRef.current);
-  }, []);
+    const updateTimer = () => {
+      if (!targetEndTimeRef.current) return;
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((targetEndTimeRef.current - now) / 1000));
+      setSeconds(remaining);
+      if (remaining <= 0 && !submittingRef.current && !loading) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        finishExam();
+      }
+    };
+
+    // 500ms active interval tick
+    timerRef.current = setInterval(updateTimer, 500);
+
+    const handleSync = () => {
+      updateTimer();
+    };
+
+    window.addEventListener("focus", handleSync);
+    window.addEventListener("pageshow", handleSync);
+    document.addEventListener("visibilitychange", handleSync);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      window.removeEventListener("focus", handleSync);
+      window.removeEventListener("pageshow", handleSync);
+      document.removeEventListener("visibilitychange", handleSync);
+    };
+  }, [loading]);
 
   useEffect(() => {
-    if (seconds === 0 && !loading) finishExam();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seconds, loading]);
+    setVisited((prev) => ({ ...prev, [current]: true }));
+  }, [current]);
+
+  const toggleMarkForReview = (qIndex = current) => {
+    setMarkedForReview((prev) => {
+      const copy = { ...prev };
+      if (copy[qIndex]) {
+        delete copy[qIndex];
+      } else {
+        copy[qIndex] = true;
+      }
+      return copy;
+    });
+  };
+
+  const clearCurrentResponse = async (qIndex = current) => {
+    setAnswers((prev) => {
+      const copy = { ...prev };
+      delete copy[qIndex];
+      return copy;
+    });
+  };
 
   const answeredCount = Object.keys(answers).length;
+  const markedCount = Object.keys(markedForReview).length;
+  const answeredAndMarkedCount = questions.filter((_, i) => answers[i] !== undefined && markedForReview[i]).length;
+  const visitedUnansweredCount = questions.filter((_, i) => answers[i] === undefined && visited[i] && !markedForReview[i]).length;
+  const notVisitedCount = questions.filter((_, i) => answers[i] === undefined && !visited[i] && !markedForReview[i]).length;
+
+  const isCurrentMarked = !!markedForReview[current];
+  const isCurrentAnswered = answers[current] !== undefined;
   const isLast = current === questions.length - 1;
 
   async function selectOption(qIndex, optIndex) {
@@ -532,6 +591,129 @@ export function ExamTakingPage() {
     }
   }
 
+  // Reusable Question Palette Grid
+  const renderPaletteContent = (isDrawer = false) => {
+    const filteredQuestions = questions.map((qObj, idx) => ({ ...qObj, idx })).filter(item => {
+      const i = item.idx;
+      const ans = answers[i] !== undefined;
+      const mrk = !!markedForReview[i];
+      if (paletteFilter === "answered") return ans;
+      if (paletteFilter === "marked") return mrk;
+      if (paletteFilter === "unanswered") return !ans;
+      return true;
+    });
+
+    return (
+      <div className="space-y-4">
+        {/* Filter Pills */}
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl text-xs font-semibold overflow-x-auto">
+          <button
+            onClick={() => setPaletteFilter("all")}
+            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+              paletteFilter === "all" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900"
+            }`}
+          >
+            All ({questions.length})
+          </button>
+          <button
+            onClick={() => setPaletteFilter("answered")}
+            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+              paletteFilter === "answered" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-900"
+            }`}
+          >
+            Ans ({answeredCount})
+          </button>
+          <button
+            onClick={() => setPaletteFilter("marked")}
+            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+              paletteFilter === "marked" ? "bg-purple-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-900"
+            }`}
+          >
+            Marked ({markedCount})
+          </button>
+          <button
+            onClick={() => setPaletteFilter("unanswered")}
+            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+              paletteFilter === "unanswered" ? "bg-amber-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-900"
+            }`}
+          >
+            Unans ({questions.length - answeredCount})
+          </button>
+        </div>
+
+        {/* Grid of Question Buttons */}
+        <div className="grid grid-cols-5 gap-2 max-h-[280px] overflow-y-auto p-1 pr-1.5 scrollbar-thin">
+          {filteredQuestions.map((item) => {
+            const i = item.idx;
+            const isAnswered = answers[i] !== undefined;
+            const isMarked = !!markedForReview[i];
+            const isVis = !!visited[i];
+            const isCur = i === current;
+
+            let btnStyle = "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200";
+            if (isAnswered && isMarked) {
+              btnStyle = "bg-purple-600 text-white border-2 border-emerald-400 shadow-sm";
+            } else if (isAnswered) {
+              btnStyle = "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm";
+            } else if (isMarked) {
+              btnStyle = "bg-purple-100 text-purple-800 border-2 border-purple-400 hover:bg-purple-200 font-bold";
+            } else if (isVis) {
+              btnStyle = "bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200";
+            }
+
+            return (
+              <button
+                key={i}
+                onClick={() => {
+                  setCurrent(i);
+                  if (isDrawer) setPaletteDrawerOpen(false);
+                }}
+                className={`relative h-10 w-full rounded-xl text-xs font-bold flex items-center justify-center transition-all cursor-pointer select-none ${btnStyle} ${
+                  isCur ? "ring-2 ring-offset-2 ring-slate-900 scale-105 z-10 font-extrabold shadow-md" : ""
+                }`}
+                title={`Question ${i + 1}`}
+              >
+                {i + 1}
+                {/* Answered & Marked dual-indicator */}
+                {isAnswered && isMarked && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full" />
+                )}
+                {/* Marked only ribbon icon */}
+                {!isAnswered && isMarked && (
+                  <Bookmark size={10} className="absolute top-1 right-1 fill-purple-600 text-purple-600" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Legend Grid */}
+        <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-600 pt-3 border-t border-gray-100">
+          <div className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded-md bg-emerald-600 flex items-center justify-center text-[8px] text-white font-bold shrink-0">✓</span>
+            <span>Answered ({answeredCount})</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded-md bg-purple-100 border border-purple-400 flex items-center justify-center text-[8px] text-purple-700 font-bold shrink-0">★</span>
+            <span>Marked ({markedCount})</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded-md bg-purple-600 border border-emerald-400 flex items-center justify-center text-[8px] text-white font-bold shrink-0">★✓</span>
+            <span>Ans & Marked ({answeredAndMarkedCount})</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded-md bg-amber-100 border border-amber-300 flex items-center justify-center text-[8px] text-amber-900 font-bold shrink-0">!</span>
+            <span>Skipped ({visitedUnansweredCount})</span>
+          </div>
+          <div className="flex items-center gap-1.5 col-span-2">
+            <span className="w-3.5 h-3.5 rounded-md bg-gray-100 border border-gray-200 flex items-center justify-center text-[8px] text-gray-500 shrink-0">·</span>
+            <span>Not Visited ({notVisitedCount})</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
@@ -546,29 +728,91 @@ export function ExamTakingPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col" style={{ fontFamily: FONT_BODY }}>
       {/* HEADER */}
-      <div className="flex items-center justify-between px-6 md:px-10 py-4 bg-white border-b border-gray-100 shadow-sm">
-        <div>
-          <div className="font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
-            {exam.title}
-          </div>
-          <div className="text-xs text-gray-400">
-            Question {current + 1} of {questions.length}
+      <div className="flex items-center justify-between px-4 sm:px-6 md:px-10 py-3.5 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
+        <div className="flex items-center gap-3">
+          <div>
+            <div className="font-bold text-gray-900 text-sm sm:text-base" style={{ fontFamily: FONT_DISPLAY }}>
+              {exam.title}
+            </div>
+            <div className="text-xs text-gray-400">
+              Question {current + 1} of {questions.length}
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 border border-gray-200 rounded-full px-4 py-1.5 text-sm font-semibold text-gray-700">
+
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Quick Question Palette Trigger Button */}
+          <button
+            onClick={() => setPaletteDrawerOpen(true)}
+            className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-full transition-colors cursor-pointer"
+            title="Open Question Palette"
+          >
+            <LayoutGrid size={15} />
+            <span className="hidden sm:inline">Palette</span>
+            <span className="bg-slate-800 text-white text-[11px] font-bold px-1.5 py-0.2 rounded-full">
+              {answeredCount}/{questions.length}
+            </span>
+          </button>
+
+          {/* Clock Timer Badge */}
+          <div className={`flex items-center gap-1.5 border rounded-full px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-bold ${
+            seconds < 300 ? "bg-red-50 text-red-600 border-red-200 animate-pulse" : "bg-gray-50 text-gray-800 border-gray-200"
+          }`}>
             <Clock size={15} /> {formatTime(seconds)}
           </div>
+
+          {/* Submit Button */}
           <button
             onClick={finishExam}
             disabled={submitting}
-            className="flex items-center gap-1.5 text-white font-semibold px-5 py-2 rounded-full hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="flex items-center gap-1.5 text-white font-semibold text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-full hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer shadow-sm"
             style={{ background: BRAND }}
           >
             {submitting ? "Submitting..." : "Submit"} <Flag size={14} />
           </button>
         </div>
       </div>
+
+      {/* SLIDE-OVER QUESTION PALETTE DRAWER (MODAL FOR MOBILE & EXPANDED VIEW) */}
+      {paletteDrawerOpen && (
+        <div className="fixed inset-0 z-[9999] flex justify-end bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div 
+            className="bg-white w-full max-w-md h-full flex flex-col shadow-2xl p-6 overflow-y-auto animate-slide-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
+              <div>
+                <h3 className="font-bold text-gray-900 text-lg" style={{ fontFamily: FONT_DISPLAY }}>
+                  Question Palette
+                </h3>
+                <p className="text-xs text-gray-500">Jump directly to any question</p>
+              </div>
+              <button
+                onClick={() => setPaletteDrawerOpen(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Drawer Palette Grid */}
+            <div className="flex-1 overflow-y-auto">
+              {renderPaletteContent(true)}
+            </div>
+
+            {/* Drawer Footer Action */}
+            <div className="pt-4 border-t border-gray-100 mt-4">
+              <button
+                onClick={() => setPaletteDrawerOpen(false)}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors cursor-pointer"
+              >
+                Resume Current Question ({current + 1})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* WARNING MODAL POPUP WITH 10s COUNTDOWN */}
       {warningModal && (
@@ -615,15 +859,71 @@ export function ExamTakingPage() {
         </div>
       )}
 
-      {/* QUESTION CONTENT */}
-      <div className="grid lg:grid-cols-[1fr_300px] gap-6 px-4 sm:px-6 md:px-10 py-8 max-w-6xl mx-auto w-full flex-1">
-        <div>
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8 shadow-sm">
-            <span className="text-xs font-bold tracking-wide" style={{ color: BRAND }}>
-              QUESTION {current + 1}
-            </span>
-            <p className="text-lg text-gray-900 mt-2 mb-6 font-medium">{q.q}</p>
+      {/* FULLSCREEN ENTRY MODAL IF NOT IN FULLSCREEN */}
+      {!isFullscreen() && !warningModal && !loading && (
+        <div className="fixed inset-0 z-[99998] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl border border-indigo-100">
+            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Maximize2 size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2" style={{ fontFamily: FONT_DISPLAY }}>
+              Fullscreen Mode Required
+            </h2>
+            <p className="text-slate-600 text-sm mb-6 leading-relaxed">
+              This exam is securely monitored and must be taken in fullscreen mode.
+            </p>
+            <button
+              onClick={async () => {
+                try {
+                  await requestFullscreen();
+                } catch (e) {
+                  console.warn("Fullscreen enter error:", e);
+                }
+              }}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg transition-all cursor-pointer text-sm flex items-center justify-center gap-2"
+            >
+              <Maximize2 size={16} /> Enter Fullscreen & Continue
+            </button>
+          </div>
+        </div>
+      )}
 
+      {/* MAIN EXAM LAYOUT */}
+      <div className="grid lg:grid-cols-[1fr_320px] gap-6 px-4 sm:px-6 md:px-10 py-6 max-w-6xl mx-auto w-full flex-1">
+        {/* QUESTION & OPTIONS CONTAINER */}
+        <div className="flex flex-col justify-between space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8 shadow-sm">
+            {/* Question Card Top Bar */}
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-3.5 mb-5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-900 text-white font-mono">
+                  QUESTION {current + 1}
+                </span>
+                <span className="text-xs font-semibold text-gray-500">
+                  +{q.marks || 1} {q.marks === 1 ? "Mark" : "Marks"}
+                </span>
+              </div>
+
+              {/* Mark for Review Toggle Pill in Card Header */}
+              <button
+                onClick={() => toggleMarkForReview(current)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  isCurrentMarked
+                    ? "bg-purple-100 text-purple-700 border border-purple-300 shadow-sm"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent"
+                }`}
+              >
+                {isCurrentMarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                <span>{isCurrentMarked ? "Marked for Review" : "Mark for Review"}</span>
+              </button>
+            </div>
+
+            {/* Question Prompt */}
+            <p className="text-base sm:text-lg text-gray-900 font-medium mb-6 leading-relaxed">
+              {q.q}
+            </p>
+
+            {/* Options List */}
             <div className="space-y-3">
               {q.options.map((opt, i) => {
                 const selected = answers[current] === i;
@@ -632,14 +932,15 @@ export function ExamTakingPage() {
                   <button
                     key={i}
                     onClick={() => selectOption(current, i)}
-                    className="w-full flex items-center gap-3 border rounded-xl px-5 py-3.5 text-left transition-colors"
+                    className="w-full flex items-center gap-3.5 border rounded-xl px-5 py-3.5 text-left transition-all cursor-pointer hover:border-gray-300"
                     style={{
                       background: selected ? BRAND_TINT : "#fff",
                       borderColor: selected ? BRAND : "#E5E7EB",
+                      boxShadow: selected ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
                     }}
                   >
                     <span
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors"
                       style={{
                         background: selected ? BRAND : "#F3F4F6",
                         color: selected ? "#fff" : "#6B7280",
@@ -647,89 +948,95 @@ export function ExamTakingPage() {
                     >
                       {letter}
                     </span>
-                    <span className="text-gray-800">{opt}</span>
+                    <span className={`text-sm ${selected ? "text-gray-900 font-semibold" : "text-gray-700"}`}>
+                      {opt}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-6">
-            <button
-              onClick={() => setCurrent((c) => Math.max(0, c - 1))}
-              disabled={current === 0}
-              className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-5 py-3 font-semibold text-gray-700 disabled:opacity-40 hover:bg-gray-50 transition-colors"
-            >
-              <ChevronLeft size={16} /> Previous
-            </button>
-            {isLast ? (
+          {/* ACTION BUTTONS TOOLBAR */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            {/* Left Action Buttons: Clear Response & Mark for Review */}
+            <div className="flex items-center gap-2">
               <button
-                onClick={finishExam}
-                disabled={submitting}
-                className="flex items-center gap-1.5 text-white font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
-                style={{ background: BRAND }}
+                onClick={() => clearCurrentResponse(current)}
+                disabled={!isCurrentAnswered}
+                className="flex items-center gap-1.5 border border-gray-200 bg-white rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-white transition-colors cursor-pointer shadow-sm"
               >
-                {submitting ? "Submitting..." : "Finish Exam"} <Flag size={15} />
+                <RotateCcw size={14} /> Clear Choice
               </button>
-            ) : (
               <button
-                onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
-                className="flex items-center gap-1.5 text-white font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity"
-                style={{ background: INK }}
+                onClick={() => toggleMarkForReview(current)}
+                className={`flex items-center gap-1.5 border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-sm ${
+                  isCurrentMarked 
+                    ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100" 
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
               >
-                Next <ChevronRight size={16} />
+                {isCurrentMarked ? <BookmarkCheck size={14} className="text-purple-600" /> : <Bookmark size={14} />}
+                <span>{isCurrentMarked ? "Unmark" : "Mark Review"}</span>
               </button>
-            )}
+            </div>
+
+            {/* Right Action Buttons: Previous, Next, Finish */}
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                onClick={() => setCurrent((c) => Math.max(0, c - 1))}
+                disabled={current === 0}
+                className="flex items-center gap-1.5 border border-gray-200 bg-white rounded-xl px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-40 hover:bg-gray-50 transition-colors cursor-pointer shadow-sm"
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+
+              {isLast ? (
+                <button
+                  onClick={finishExam}
+                  disabled={submitting}
+                  className="flex items-center gap-1.5 text-white font-semibold text-xs sm:text-sm px-5 sm:px-6 py-2.5 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer shadow-sm"
+                  style={{ background: BRAND }}
+                >
+                  {submitting ? "Submitting..." : "Finish Exam"} <Flag size={15} />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
+                  className="flex items-center gap-1.5 text-white font-semibold text-xs sm:text-sm px-5 sm:px-6 py-2.5 rounded-xl hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+                  style={{ background: INK }}
+                >
+                  Next <ChevronRight size={16} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* SIDEBAR PALETTE */}
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-4">Questions</h3>
-            <div className="grid grid-cols-5 gap-2 mb-4">
-              {questions.map((_, i) => {
-                const isAnswered = answers[i] !== undefined;
-                const isCurrent = i === current;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setCurrent(i)}
-                    className="w-10 h-10 rounded-lg text-sm font-semibold flex items-center justify-center transition-all"
-                    style={{
-                      background: isAnswered ? BRAND : "#F3F4F6",
-                      color: isAnswered ? "#fff" : "#6B7280",
-                      border: isCurrent ? "2px solid #111827" : "2px solid transparent",
-                    }}
-                  >
-                    {i + 1}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="space-y-1.5 text-xs text-gray-500 pt-3 border-t border-gray-100">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: BRAND }} /> Answered
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-gray-200" /> Unanswered
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-4">Progress</h3>
-            <div className="flex items-center justify-between text-sm mb-1">
-              <span className="text-gray-500">Answered</span>
-              <span className="font-semibold text-gray-900">
-                {answeredCount}/{questions.length}
+        {/* DESKTOP SIDEBAR QUESTION PALETTE */}
+        <div className="hidden lg:block space-y-5">
+          {/* Question Palette Box */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3.5">
+              <h3 className="font-bold text-gray-900 text-sm" style={{ fontFamily: FONT_DISPLAY }}>
+                Question Palette
+              </h3>
+              <span className="text-xs text-gray-500 font-semibold font-mono">
+                {answeredCount}/{questions.length} Ans
               </span>
             </div>
-            <div className="flex items-center justify-between text-sm mb-3">
-              <span className="text-gray-500">Remaining</span>
-              <span className="font-semibold text-gray-900">{questions.length - answeredCount}</span>
+            {renderPaletteContent(false)}
+          </div>
+
+          {/* Test Progress Card */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between text-xs font-bold">
+              <span className="text-gray-500 uppercase tracking-wider">Exam Progress</span>
+              <span className="text-gray-900">
+                {Math.round((answeredCount / (questions.length || 1)) * 100)}%
+              </span>
             </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{

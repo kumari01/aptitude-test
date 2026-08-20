@@ -50,7 +50,7 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
             eventType: { $in: ["TAB_SWITCH", "FULLSCREEN_EXIT", "WINDOW_BLUR"] }
         }).sort({ timestamp: -1 });
 
-        if (lastViolation && (Date.now() - new Date(lastViolation.timestamp).getTime()) < 3000) {
+        if (lastViolation && (Date.now() - new Date(lastViolation.timestamp).getTime()) < 1500) {
             return {
                 event: lastViolation,
                 session
@@ -69,13 +69,16 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
     // 6. Update session counters
     let updatedSession;
 
-    if (eventType === "TAB_SWITCH") {
+    if (eventType === "TAB_SWITCH" || eventType === "FULLSCREEN_EXIT") {
+
+        const riskIncrement = SEVERITY_RISK_INCREMENT[severity] || 10;
 
         updatedSession = await ProctoringSession.findByIdAndUpdate(
             sessionId,
             {
                 $inc: {
-                    tabSwitchCount: 1
+                    tabSwitchCount: 1,
+                    riskScore: riskIncrement
                 }
             },
             {
@@ -83,13 +86,18 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
             }
         );
 
+        if (updatedSession?.riskScore > 100) {
+            updatedSession.riskScore = 100;
+            await updatedSession.save();
+        }
+
         if (updatedSession?.attemptId) {
             await ExamAttempt.findByIdAndUpdate(updatedSession.attemptId, {
                 $inc: { tab_switches: 1 }
             });
         }
 
-        // TAB_SWITCH limit check -> automatic submission
+        // Limit check -> automatic submission
         let limit = 3;
         if (updatedSession.attemptId) {
             try {
@@ -164,8 +172,8 @@ const createProctoringEvent = async ({ sessionId, eventType }) => {
             await updatedSession.save();
         }
 
-        // Increment tab_switches on attempt for window blur or fullscreen exit
-        if (updatedSession.attemptId && (eventType === "FULLSCREEN_EXIT" || eventType === "WINDOW_BLUR")) {
+        // Increment tab_switches on attempt for window blur
+        if (updatedSession.attemptId && eventType === "WINDOW_BLUR") {
             await ExamAttempt.findByIdAndUpdate(updatedSession.attemptId, {
                 $inc: { tab_switches: 1 }
             });
