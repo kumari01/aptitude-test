@@ -414,9 +414,12 @@ const listStudentAssignedTests = async (req, res) => {
 
         let combinedIds = Array.from(new Set([...assignedTestIds, ...allTargetTestIds, ...targetedIds]));
 
-        let testQuery = {};
+        let testQuery = {
+            status: { $ne: "Archived" },
+            isDeleted: { $ne: true }
+        };
         if (combinedIds.length > 0) {
-            testQuery = { _id: { $in: combinedIds } };
+            testQuery._id = { $in: combinedIds };
         }
 
         // Return latest exams first
@@ -790,12 +793,79 @@ const updateFullTestConfiguration = async (req, res) => {
     }
 };
 
+// Soft Delete / Archive an Examination
+const archiveTest = async (req, res) => {
+    try {
+        const { testId } = req.params;
+        const test = await Test.findByIdAndUpdate(
+            testId,
+            { status: "Archived", isDeleted: true },
+            { returnDocument: 'after' }
+        );
+        if (!test) {
+            return res.status(404).json({ message: "Test not found" });
+        }
+        res.status(200).json({ message: "Exam archived successfully", test });
+    } catch (err) {
+        console.error("Error archiving test:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+// Restore an Archived Examination to Draft
+const restoreTest = async (req, res) => {
+    try {
+        const { testId } = req.params;
+        const test = await Test.findByIdAndUpdate(
+            testId,
+            { status: "Draft", isDeleted: false },
+            { returnDocument: 'after' }
+        );
+        if (!test) {
+            return res.status(404).json({ message: "Test not found" });
+        }
+        res.status(200).json({ message: "Exam restored successfully to Draft", test });
+    } catch (err) {
+        console.error("Error restoring test:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+// Re-Authorize a Disqualified / Flawed Student Attempt
+const reauthorizeStudentAttempt = async (req, res) => {
+    try {
+        const { attemptId } = req.params;
+        const attempt = await ExamAttempt.findById(attemptId);
+        if (!attempt) {
+            return res.status(404).json({ message: "Exam attempt record not found" });
+        }
+
+        const studentId = attempt.student_id;
+        const testId = attempt.testId || attempt.exam_id;
+
+        // Delete the disqualified attempt so student can write a fresh attempt
+        await ExamAttempt.findByIdAndDelete(attemptId);
+
+        res.status(200).json({
+            message: "Student attempt has been successfully reset. The student is re-authorized to retake the examination.",
+            studentId,
+            testId
+        });
+    } catch (err) {
+        console.error("Error re-authorizing student attempt:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 module.exports = {
     createTest,
     updateTestTarget,
     listAllTests,
     updateTestSettings,
     updateFullTestConfiguration,
+    archiveTest,
+    restoreTest,
+    reauthorizeStudentAttempt,
     scheduleTest,
     createSection,
     addQuestionToSection,

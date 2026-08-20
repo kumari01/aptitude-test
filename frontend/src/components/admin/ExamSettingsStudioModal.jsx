@@ -573,14 +573,18 @@ export default function ExamSettingsStudioModal({
               {activeTab === "schedule" && (
                 <div className="space-y-5 animate-fade-in">
                   {/* Status Toggle Card */}
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <div className="font-bold text-sm text-slate-900">Publishing Status</div>
+                      <div className="font-bold text-sm text-slate-900">Publishing & Lifecycle Status</div>
                       <div className="text-xs text-slate-500">
-                        {form.status === "Published" ? "Assessment is active and accessible during schedule window" : "Assessment is saved as draft and hidden from candidates"}
+                        {form.status === "Published"
+                          ? "Assessment is active and accessible during the schedule window"
+                          : form.status === "Archived"
+                          ? "Assessment is archived/soft-deleted and hidden from student portals"
+                          : "Assessment is saved as draft and hidden from candidates"}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-200">
+                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shrink-0">
                       <button
                         type="button"
                         onClick={() => setForm({ ...form, status: "Draft" })}
@@ -602,6 +606,17 @@ export default function ExamSettingsStudioModal({
                         }`}
                       >
                         Published
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, status: "Archived" })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          form.status === "Archived"
+                            ? "bg-rose-600 text-white shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Archived
                       </button>
                     </div>
                   </div>
@@ -640,6 +655,31 @@ export default function ExamSettingsStudioModal({
                       <p className="font-bold">Access Window Guard</p>
                       <p className="mt-0.5">Students can only start or resume this exam when current server time falls between the scheduled start and end timestamps.</p>
                     </div>
+                  </div>
+
+                  {/* Danger Zone: Soft Delete / Archival Info */}
+                  <div className="p-4 bg-rose-50/60 border border-rose-200 rounded-2xl flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-xs text-rose-950">Soft-Delete & Examination Archival</div>
+                      <div className="text-[11px] text-rose-700">Archiving hides this exam from all students while preserving historical telemetry, score records, and answer audits.</div>
+                    </div>
+                    {form.status === "Archived" ? (
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, status: "Draft" })}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
+                      >
+                        Restore Exam
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, status: "Archived" })}
+                        className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
+                      >
+                        Archive Exam
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

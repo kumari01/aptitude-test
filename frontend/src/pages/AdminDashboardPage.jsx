@@ -19,7 +19,8 @@ import {
   Layers,
   Sparkles,
   LayoutGrid,
-  List
+  List,
+  RotateCcw
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
@@ -43,6 +44,21 @@ export function AdminDashboardPage() {
   const [examSearchQuery, setExamSearchQuery] = useState("");
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // "all" | "passed" | "failed" | "in_progress" | "disqualified"
+
+  const handleReauthorizeStudent = async (attemptId, studentName) => {
+    if (!window.confirm(`Are you sure you want to re-authorize ${studentName || "this candidate"}? This will clear their disqualified attempt record and permit them to retake the examination.`)) {
+      return;
+    }
+    try {
+      await api.post(`/test-management/admin/attempts/${attemptId}/reauthorize`);
+      toast.success(`Successfully re-authorized ${studentName || "student"}. They can now write the exam.`);
+      // Remove or reset attempt in local attempts state
+      setAttempts(prev => prev.filter(a => a.id !== attemptId && a._id !== attemptId));
+    } catch (err) {
+      console.error("Failed to re-authorize candidate:", err);
+      toast.error(err.response?.data?.message || "Failed to re-authorize candidate");
+    }
+  };
 
   // Overview metrics
   const [overviewStats, setOverviewStats] = useState({
@@ -281,12 +297,13 @@ export function AdminDashboardPage() {
                     <th className="px-4 py-3">SCORE (%)</th>
                     <th className="px-4 py-3">PROCTORING VIOLATIONS</th>
                     <th className="px-4 py-3">STATUS</th>
-                    <th className="px-4 py-3 text-right">DATE & TIME</th>
+                    <th className="px-4 py-3">DATE & TIME</th>
+                    <th className="px-4 py-3 text-right">ACTION</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {filteredStudents.map((att) => (
-                    <tr key={att.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={att.id || att._id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-3">
                         <div className="font-bold text-gray-900 text-xs sm:text-sm">{att.studentName}</div>
                         <div className="text-[11px] text-gray-400 font-mono">Roll: {att.rollNumber}</div>
@@ -356,8 +373,24 @@ export function AdminDashboardPage() {
                           {att.status === "Started" ? "In Progress" : (att.status || "Submitted")}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right text-xs text-gray-400 font-medium whitespace-nowrap">
+                      <td className="px-4 py-3 text-xs text-gray-500 font-medium whitespace-nowrap">
                         {new Date(att.date).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {att.status === "Disqualified" || att.status === "Auto Submitted" || att.status === "Time Expired" || (att.violations > 0 && (att.score ?? 0) < 40) ? (
+                          <button
+                            type="button"
+                            onClick={() => handleReauthorizeStudent(att.id || att._id, att.studentName)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                            title="Reset violations & allow this student to retake the exam"
+                          >
+                            <RotateCcw size={12} /> Allow Retake
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-bold text-gray-400">
+                            Attempt Logged
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}

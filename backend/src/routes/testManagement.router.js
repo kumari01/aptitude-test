@@ -13,6 +13,15 @@ router.put("/:testId/settings", authenticate, requireAdmin, controller.updateTes
 // Unified full exam configuration update (General, Proctoring, Target, Schedule)
 router.put("/:testId/full-update", authenticate, requireAdmin, controller.updateFullTestConfiguration);
 
+// Soft Delete / Archive a test
+router.put("/:testId/archive", authenticate, requireAdmin, controller.archiveTest);
+
+// Restore an archived test to Draft
+router.put("/:testId/restore", authenticate, requireAdmin, controller.restoreTest);
+
+// Re-Authorize a student's attempt (override disqualification)
+router.post("/admin/attempts/:attemptId/reauthorize", authenticate, requireAdmin, controller.reauthorizeStudentAttempt);
+
 // Update test target group
 router.put("/:testId/target", authenticate, requireAdmin, controller.updateTestTarget);
 

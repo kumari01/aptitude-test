@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   FileText, 
@@ -27,7 +27,9 @@ import { ExamsSkeleton, StudentExamsSkeleton, AdminExamsSkeleton } from "../comp
 import { 
   Building2, 
   ShieldCheck, 
-  Sliders 
+  Sliders,
+  Archive,
+  RotateCcw
 } from "lucide-react";
 
 const formatForDateTimeLocal = (dateInput) => {
@@ -42,15 +44,30 @@ export function ExamsPage() {
   const toast = useToast();
   const isAdmin = !!localStorage.getItem("admin");
 
+  // Click outside ref for 3-dots popover so full-screen backdrop doesn't block scroll
+  const activeMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (activeMenuRef.current && !activeMenuRef.current.contains(e.target)) {
+        setOpenMenuTestId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Student state
   const [assignedExams, setAssignedExams] = useState([]);
   
   // Admin state
   const [adminTests, setAdminTests] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("all");
   const [overviewStats, setOverviewStats] = useState({
     totalExams: 0,
     publishedExams: 0,
     draftExams: 0,
+    archivedExams: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -140,10 +157,13 @@ export function ExamsPage() {
         setAdminTests(formatted);
 
         const published = formatted.filter(t => t.status === "Published").length;
+        const archived = formatted.filter(t => t.status === "Archived").length;
+        const draft = formatted.filter(t => t.status === "Draft").length;
         setOverviewStats({
           totalExams: formatted.length,
           publishedExams: published,
-          draftExams: formatted.length - published,
+          draftExams: draft,
+          archivedExams: archived
         });
       }
       setLoading(false);
@@ -151,6 +171,28 @@ export function ExamsPage() {
       console.error("Error fetching admin tests:", err);
       toast.error(err.response?.data?.message || "Failed to load managed examinations");
       setLoading(false);
+    }
+  };
+
+  const handleArchiveExam = async (testId) => {
+    try {
+      await api.put(`/test-management/${testId}/archive`);
+      toast.success("Exam archived successfully (soft-deleted from candidates)");
+      fetchAdminData();
+    } catch (err) {
+      console.error("Failed to archive exam:", err);
+      toast.error(err.response?.data?.message || "Failed to archive exam");
+    }
+  };
+
+  const handleRestoreExam = async (testId) => {
+    try {
+      await api.put(`/test-management/${testId}/restore`);
+      toast.success("Exam restored to Draft successfully");
+      fetchAdminData();
+    } catch (err) {
+      console.error("Failed to restore exam:", err);
+      toast.error(err.response?.data?.message || "Failed to restore exam");
     }
   };
 
@@ -244,7 +286,7 @@ export function ExamsPage() {
 
         {/* Managed Exams List Table */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm mt-8">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-gray-100">
             <div>
               <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
                 All Examinations & Setup Pipeline
@@ -253,9 +295,29 @@ export function ExamsPage() {
                 Author exam questions, configure security policy rules, schedule windows, and monitor proctoring telemetry.
               </p>
             </div>
-            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-              {adminTests.length} Total Exams
-            </span>
+
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl shrink-0">
+              {[
+                { id: "all", label: `All (${adminTests.length})` },
+                { id: "Published", label: `Published (${overviewStats.publishedExams || 0})` },
+                { id: "Draft", label: `Draft (${overviewStats.draftExams || 0})` },
+                { id: "Archived", label: `Archived (${overviewStats.archivedExams || 0})` },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    statusFilter === tab.id
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {loading ? (
@@ -263,16 +325,29 @@ export function ExamsPage() {
               <Loader2 className="animate-spin mb-3" size={32} />
               <p className="font-medium text-sm">Loading examinations...</p>
             </div>
-          ) : adminTests.length === 0 ? (
+          ) : adminTests.filter(t => statusFilter === "all" || (statusFilter === "Archived" ? (t.status === "Archived" || t.isDeleted) : (t.status === statusFilter && !t.isDeleted))).length === 0 ? (
             <div className="text-center py-12 text-gray-500 bg-slate-50 rounded-xl border border-slate-200">
               <FileText size={40} className="mx-auto text-gray-300 mb-3" />
-              <p className="font-semibold text-gray-700">No exams created yet.</p>
-              <p className="text-xs text-gray-400 mt-1">Click "Create Examination" above to create your first assessment.</p>
+              <p className="font-semibold text-gray-700">No {statusFilter === "all" ? "" : statusFilter.toLowerCase()} examinations found.</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {statusFilter === "Archived"
+                  ? "Soft-deleted / archived exams will appear here for recovery."
+                  : "Click 'Create Examination' above to create your first assessment."}
+              </p>
             </div>
           ) : (
             <div className="space-y-4">
-              {adminTests.map((t) => (
-                <div key={t.id} className="p-5 border border-gray-200 rounded-xl bg-white hover:border-gray-300 transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              {adminTests
+                .filter(t => statusFilter === "all" || (statusFilter === "Archived" ? (t.status === "Archived" || t.isDeleted) : (t.status === statusFilter && !t.isDeleted)))
+                .map((t) => (
+                <div 
+                  key={t.id} 
+                  className={`p-5 border rounded-xl transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
+                    t.status === "Archived" 
+                      ? "border-rose-200 bg-rose-50/30 opacity-80" 
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  }`}
+                >
                   <div>
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -280,13 +355,17 @@ export function ExamsPage() {
                       </span>
                       <span
                         className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                          t.status === "Published" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-amber-50 text-amber-700 border border-amber-100"
+                          t.status === "Published" 
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
+                            : t.status === "Archived"
+                            ? "bg-rose-100 text-rose-800 border border-rose-200"
+                            : "bg-amber-50 text-amber-700 border border-amber-100"
                         }`}
                       >
                         {t.status}
                       </span>
                     </div>
-                    <h4 className="text-lg font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
+                    <h4 className={`text-lg font-bold ${t.status === "Archived" ? "text-slate-600 line-through" : "text-gray-900"}`} style={{ fontFamily: FONT_DISPLAY }}>
                       {t.title}
                     </h4>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 mt-2">
@@ -299,7 +378,14 @@ export function ExamsPage() {
 
                   <div className="flex items-center gap-2 relative shrink-0">
                     {/* Primary Action Button */}
-                    {t.status === "Published" ? (
+                    {t.status === "Archived" ? (
+                      <button
+                        onClick={() => handleRestoreExam(t.id)}
+                        className="text-xs font-bold px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <RotateCcw size={14} /> Restore Exam
+                      </button>
+                    ) : t.status === "Published" ? (
                       <button
                         onClick={() => {
                           setMonitorTestId(t.id);
@@ -336,97 +422,118 @@ export function ExamsPage() {
                       <MoreVertical size={16} />
                     </button>
 
-                    {/* Sleek Enterprise Dropdown Popover */}
+                    {/* Sleek Enterprise Dropdown Popover (No scroll-blocking overlay) */}
                     {openMenuTestId === t.id && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-20"
-                          onClick={() => setOpenMenuTestId(null)}
-                        />
-                        <div className="absolute right-0 top-12 z-30 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 text-xs text-slate-700 font-semibold space-y-1">
+                      <div 
+                        ref={activeMenuRef}
+                        className="absolute right-0 top-12 z-30 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 text-xs text-slate-700 font-semibold space-y-1 max-h-80 overflow-y-auto"
+                      >
+                        <button
+                          onClick={() => {
+                            setOpenMenuTestId(null);
+                            setStudioTest(t);
+                            setStudioInitialTab("examRules");
+                            setStudioOpen(true);
+                          }}
+                          className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-indigo-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                        >
+                          <Sliders size={15} className="text-indigo-600" />
+                          <span>Configuration Studio</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setOpenMenuTestId(null);
+                            setStudioTest(t);
+                            setStudioInitialTab("proctoring");
+                            setStudioOpen(true);
+                          }}
+                          className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-amber-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                        >
+                          <ShieldCheck size={15} className="text-amber-600" />
+                          <span>Anti-Cheat & Proctoring</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setOpenMenuTestId(null);
+                            setStudioTest(t);
+                            setStudioInitialTab("targeting");
+                            setStudioOpen(true);
+                          }}
+                          className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-emerald-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                        >
+                          <Building2 size={15} className="text-emerald-600" />
+                          <span>Department Targeting</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setOpenMenuTestId(null);
+                            setStudioTest(t);
+                            setStudioInitialTab("schedule");
+                            setStudioOpen(true);
+                          }}
+                          className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-blue-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                        >
+                          <Calendar size={15} className="text-blue-600" />
+                          <span>Schedule & Publishing</span>
+                        </button>
+
+                        <div className="border-t border-slate-100 my-1"></div>
+
+                        <button
+                          onClick={() => {
+                            setOpenMenuTestId(null);
+                            setSelectedTestId(t.id);
+                            setAddQuestionForm(prev => ({ ...prev, testId: t.id }));
+                            setActiveModal("addQuestion");
+                          }}
+                          className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                        >
+                          <HelpCircle size={15} className="text-slate-600" />
+                          <span>Add Question Item</span>
+                        </button>
+
+                        {t.status === "Published" && (
                           <button
                             onClick={() => {
                               setOpenMenuTestId(null);
-                              setStudioTest(t);
-                              setStudioInitialTab("examRules");
-                              setStudioOpen(true);
+                              setMonitorTestId(t.id);
+                              setMonitorTestTitle(t.title);
+                              setLiveMonitorOpen(true);
                             }}
-                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-indigo-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-amber-50 flex items-center gap-2.5 text-amber-900 border-t border-slate-100 transition-colors cursor-pointer"
                           >
-                            <Sliders size={15} className="text-indigo-600" />
-                            <span>Configuration Studio</span>
+                            <ShieldAlert size={15} className="text-amber-600" />
+                            <span>Live Proctoring Stream</span>
                           </button>
+                        )}
 
+                        {t.status !== "Archived" ? (
                           <button
                             onClick={() => {
                               setOpenMenuTestId(null);
-                              setStudioTest(t);
-                              setStudioInitialTab("proctoring");
-                              setStudioOpen(true);
+                              handleArchiveExam(t.id);
                             }}
-                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-amber-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-rose-50 flex items-center gap-2.5 text-rose-700 border-t border-slate-100 transition-colors cursor-pointer"
                           >
-                            <ShieldCheck size={15} className="text-amber-600" />
-                            <span>Anti-Cheat & Proctoring</span>
+                            <Archive size={15} className="text-rose-600" />
+                            <span>Archive (Soft Delete)</span>
                           </button>
-
+                        ) : (
                           <button
                             onClick={() => {
                               setOpenMenuTestId(null);
-                              setStudioTest(t);
-                              setStudioInitialTab("targeting");
-                              setStudioOpen(true);
+                              handleRestoreExam(t.id);
                             }}
-                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-emerald-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
+                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-emerald-50 flex items-center gap-2.5 text-emerald-700 border-t border-slate-100 transition-colors cursor-pointer"
                           >
-                            <Building2 size={15} className="text-emerald-600" />
-                            <span>Department Targeting</span>
+                            <RotateCcw size={15} className="text-emerald-600" />
+                            <span>Restore to Draft</span>
                           </button>
-
-                          <button
-                            onClick={() => {
-                              setOpenMenuTestId(null);
-                              setStudioTest(t);
-                              setStudioInitialTab("schedule");
-                              setStudioOpen(true);
-                            }}
-                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-blue-50/70 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
-                          >
-                            <Calendar size={15} className="text-blue-600" />
-                            <span>Schedule & Publishing</span>
-                          </button>
-
-                          <div className="border-t border-slate-100 my-1"></div>
-
-                          <button
-                            onClick={() => {
-                              setOpenMenuTestId(null);
-                              setSelectedTestId(t.id);
-                              setAddQuestionForm(prev => ({ ...prev, testId: t.id }));
-                              setActiveModal("addQuestion");
-                            }}
-                            className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-2.5 text-slate-800 transition-colors cursor-pointer"
-                          >
-                            <HelpCircle size={15} className="text-slate-600" />
-                            <span>Add Question Item</span>
-                          </button>
-
-                          {t.status === "Published" && (
-                            <button
-                              onClick={() => {
-                                setOpenMenuTestId(null);
-                                setMonitorTestId(t.id);
-                                setMonitorTestTitle(t.title);
-                                setLiveMonitorOpen(true);
-                              }}
-                              className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-amber-50 flex items-center gap-2.5 text-amber-900 border-t border-slate-100 transition-colors cursor-pointer"
-                            >
-                              <ShieldAlert size={15} className="text-amber-600" />
-                              <span>Live Proctoring Stream</span>
-                            </button>
-                          )}
-                        </div>
-                      </>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
