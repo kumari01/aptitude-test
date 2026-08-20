@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Test = require("../model/testModel/test.model");
+const TestSchedule = require("../model/testModel/testSchedule.model");
 const ExamAttempt = require("../model/testModel/testAttempt.model");
 const questionModel = require("../model/question.model");
 const {
@@ -68,6 +69,22 @@ const startExam = async (req, res) => {
         }).sort({ createdAt: -1 });
 
         if (!attempt) {
+            // Check schedule validity before allowing new attempt creation
+            const schedule = await TestSchedule.findOne({ testId: examId }).sort({ createdAt: -1 });
+            if (schedule) {
+                const now = new Date();
+                if (schedule.startAt && now < new Date(schedule.startAt)) {
+                    return res.status(400).json({
+                        message: `Exam has not started yet. It is scheduled to start at ${new Date(schedule.startAt).toLocaleString()}`
+                    });
+                }
+                if (schedule.endAt && now > new Date(schedule.endAt)) {
+                    return res.status(400).json({
+                        message: "Exam schedule window has ended."
+                    });
+                }
+            }
+
             // 2. Check completed attempts
             const completedAttempts = await ExamAttempt.find({
                 $and: [

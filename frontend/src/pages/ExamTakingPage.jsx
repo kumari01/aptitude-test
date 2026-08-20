@@ -107,8 +107,6 @@ export function ExamTakingPage() {
     setWarningModal(null);
     setModalCountdown(10);
     isWarningActiveRef.current = false;
-    // 3-second grace period after modal dismissal so refocusing/fullscreen doesn't trigger repeat violations
-    warningGraceUntilRef.current = Date.now() + 3000;
 
     // Automatically re-trigger fullscreen on acknowledgement click if exited
     if (!isFullscreen()) {
@@ -363,7 +361,7 @@ export function ExamTakingPage() {
 
   const logProctoringEvent = async (eventType) => {
     const sId = proctoringSessionIdRef.current;
-    if (!sId || submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
+    if (!sId || submittingRef.current || warningModalRef.current || isWarningActiveRef.current) return;
 
     // Immediately lock out subsequent events synchronously while this event is evaluated and modal is active
     isWarningActiveRef.current = true;
@@ -412,8 +410,15 @@ export function ExamTakingPage() {
 
     let lastTabSwitchTime = 0;
 
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" || e.keyCode === 27) {
+        if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current) return;
+        logProctoringEvent("FULLSCREEN_EXIT");
+      }
+    };
+
     const handleVisibilityChange = () => {
-      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
+      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current) return;
       if (document.hidden) {
         const now = Date.now();
         if (now - lastTabSwitchTime > 1500) {
@@ -424,7 +429,7 @@ export function ExamTakingPage() {
     };
 
     const handleWindowBlur = () => {
-      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
+      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current) return;
       const now = Date.now();
       if (now - lastTabSwitchTime > 1500) {
         lastTabSwitchTime = now;
@@ -433,7 +438,7 @@ export function ExamTakingPage() {
     };
 
     const handleFullscreenChange = () => {
-      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
+      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current) return;
       const isFull = document.fullscreenElement ||
         document.webkitFullscreenElement ||
         document.mozFullScreenElement ||
@@ -445,7 +450,7 @@ export function ExamTakingPage() {
 
     let lastResizeTime = 0;
     const handleResize = () => {
-      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current || Date.now() < warningGraceUntilRef.current) return;
+      if (submittingRef.current || warningModalRef.current || isWarningActiveRef.current) return;
       const now = Date.now();
       if (now - lastResizeTime < 2000) return;
 
@@ -459,7 +464,7 @@ export function ExamTakingPage() {
 
     const handleCopy = (e) => {
       if (e && e.preventDefault) e.preventDefault();
-      if (!isFullscreen() && !warningModalRef.current && !isWarningActiveRef.current && Date.now() >= warningGraceUntilRef.current) {
+      if (!isFullscreen() && !warningModalRef.current && !isWarningActiveRef.current) {
         requestFullscreen().catch(() => { });
       }
     };
@@ -468,6 +473,7 @@ export function ExamTakingPage() {
       if (e && e.preventDefault) e.preventDefault();
     };
 
+    window.addEventListener("keydown", handleKeyDown);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleWindowBlur);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -480,6 +486,7 @@ export function ExamTakingPage() {
     window.addEventListener("paste", handlePaste);
 
     return () => {
+      window.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
@@ -586,11 +593,9 @@ export function ExamTakingPage() {
               {warningModal.message}
             </p>
 
-            {warningModal.limit > 0 && (
-              <div className="inline-block bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold px-3.5 py-1.5 rounded-full mb-6">
-                Warning Count: {warningModal.switchCount} of {warningModal.limit} allowed switches
-              </div>
-            )}
+            <div className="inline-block bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold px-3.5 py-1.5 rounded-full mb-6">
+              Warning #{warningModal.switchCount} Issued
+            </div>
 
             {/* COUNTDOWN TIMER RING */}
             <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
