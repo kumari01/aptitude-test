@@ -35,8 +35,8 @@ export function MainLayout() {
   }, [mobileOpen]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex" style={{ fontFamily: FONT_BODY }}>
-      {/* Desktop/tablet sidebar (collapsible) + Mobile overlay drawer */}
+    <div className="h-screen bg-gray-50 flex overflow-hidden" style={{ fontFamily: FONT_BODY }}>
+      {/* Desktop/tablet sidebar (collapsible & fixed to screen height) + Mobile overlay drawer */}
       <Sidebar
         collapsed={collapsed}
         mobileOpen={mobileOpen}
@@ -44,7 +44,8 @@ export function MainLayout() {
         onToggleCollapsed={() => setCollapsed((c) => !c)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Right Content Area - independently scrollable */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <TopBar onMenuClick={() => setMobileOpen(true)} />
         <main className="flex-1 p-2 sm:p-4 md:p-6 overflow-y-auto">
           <Outlet />

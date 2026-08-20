@@ -10,7 +10,8 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Settings
 } from "lucide-react";
 import Logo from "../common/Logo";
 import { INK, BRAND, FONT_DISPLAY } from "../../constants/theme";
@@ -23,49 +24,47 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onToggleCollapse
         { to: "/admin", icon: <ShieldCheck size={19} />, label: "Admin Console", badge: "Admin" },
         { to: "/exams", icon: <BookOpenCheck size={19} />, label: "Exams Studio" },
         { to: "/results", icon: <BarChart3 size={19} />, label: "Student Telemetry" },
-        { to: "/profile", icon: <UserCircle2 size={19} />, label: "Settings & Profile" },
       ]
     : [
         { to: "/dashboard", icon: <LayoutDashboard size={19} />, label: "Dashboard" },
         { to: "/exams", icon: <BookOpenCheck size={19} />, label: "Assessments" },
         { to: "/results", icon: <BarChart3 size={19} />, label: "Results & History" },
-        { to: "/profile", icon: <UserCircle2 size={19} />, label: "My Profile" },
       ];
 
   // ---- Desktop/tablet sidebar (collapsible) ----
   const desktopSidebar = (
     <aside
-      className={`hidden md:flex flex-col bg-white border-r border-gray-200 min-h-screen transition-all duration-300 ${
+      className={`hidden md:flex flex-col bg-white border-r border-gray-200 h-screen sticky top-0 transition-all duration-300 ${
         collapsed ? "w-20" : "w-64"
-      } shrink-0 select-none`}
+      } shrink-0 select-none justify-between overflow-hidden z-20`}
     >
-      {/* Top Brand / Logo & Toggle area */}
-      <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} px-4 py-5 border-b border-gray-100 min-h-[73px]`}>
-        {collapsed ? (
-          <button
-            onClick={onToggleCollapsed}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
-            title="Expand sidebar"
-          >
-            <Menu size={20} />
-          </button>
-        ) : (
-          <>
-            <Logo />
+      <div>
+        {/* Top Brand / Logo & Toggle area */}
+        <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} px-4 py-5 border-b border-gray-100 min-h-[73px]`}>
+          {collapsed ? (
             <button
               onClick={onToggleCollapsed}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-              title="Collapse sidebar"
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
+              title="Expand sidebar"
             >
-              <ChevronLeft size={18} />
+              <Menu size={20} />
             </button>
-          </>
-        )}
-      </div>
+          ) : (
+            <>
+              <Logo />
+              <button
+                onClick={onToggleCollapsed}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                title="Collapse sidebar"
+              >
+                <ChevronLeft size={18} />
+              </button>
+            </>
+          )}
+        </div>
 
-      {/* Main Navigation Links */}
-      <div className="flex-1 py-5 px-3 space-y-6">
-        <div>
+        {/* Main Navigation Links */}
+        <div className="py-5 px-3">
           {!collapsed && (
             <div className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-2">
               {isAdmin ? "Admin Management" : "Main Navigation"}
@@ -125,22 +124,69 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onToggleCollapse
         </div>
       </div>
 
-      {/* Bottom Status / Mode Pill */}
-      <div className="p-3 border-t border-gray-100">
+      {/* Bottom Profile & Status Section */}
+      <div className="p-3 border-t border-gray-100 space-y-2">
+        {!collapsed && (
+          <div className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-gray-400">
+            Account
+          </div>
+        )}
+
+        {/* Profile Link at Bottom */}
+        <NavLink
+          to="/profile"
+          className={({ isActive }) =>
+            `group relative flex items-center ${
+              collapsed ? "justify-center" : "justify-start gap-3.5"
+            } px-3 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
+              isActive
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }`
+          }
+          title={collapsed ? "My Profile" : undefined}
+        >
+          {({ isActive }) => (
+            <>
+              <div
+                className={`w-6 h-6 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
+                  isActive ? "text-white" : "text-gray-500 group-hover:text-gray-900"
+                }`}
+              >
+                <UserCircle2 size={19} />
+              </div>
+              {!collapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">My Profile</span>
+                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-gray-600">
+                    Settings →
+                  </span>
+                </div>
+              )}
+              {collapsed && (
+                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 whitespace-nowrap">
+                  My Profile
+                </div>
+              )}
+            </>
+          )}
+        </NavLink>
+
+        {/* Live Status Pill */}
         {!collapsed ? (
-          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-gray-50 border border-gray-200/80">
-            <div className={`w-2.5 h-2.5 rounded-full ${isAdmin ? "bg-amber-500" : "bg-emerald-500"} shrink-0 animate-pulse`} />
+          <div className="flex items-center gap-2.5 p-2 rounded-xl bg-gray-50 border border-gray-200/80">
+            <div className={`w-2 h-2 rounded-full ${isAdmin ? "bg-amber-500" : "bg-emerald-500"} shrink-0 animate-pulse`} />
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold text-gray-900 truncate">
+              <div className="text-[11px] font-bold text-gray-900 truncate">
                 {isAdmin ? "Admin Portal" : "Student Portal"}
               </div>
-              <div className="text-[10px] text-gray-400 font-medium">v1.0 • Online</div>
+              <div className="text-[10px] text-gray-400 font-medium">Session Active</div>
             </div>
           </div>
         ) : (
-          <div className="flex justify-center">
+          <div className="flex justify-center pt-1">
             <div
-              className={`w-3 h-3 rounded-full ${isAdmin ? "bg-amber-500" : "bg-emerald-500"} ring-4 ring-gray-100`}
+              className={`w-2.5 h-2.5 rounded-full ${isAdmin ? "bg-amber-500" : "bg-emerald-500"} ring-4 ring-gray-100`}
               title={isAdmin ? "Admin Portal Online" : "Student Portal Online"}
             />
           </div>
@@ -211,12 +257,29 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onToggleCollapse
           </div>
         </div>
 
-        {/* Mobile Drawer Bottom Tag */}
-        <div className="p-4 border-t border-gray-100 bg-gray-50/50">
-          <div className="flex items-center gap-2">
-            <div className={`w-2.5 h-2.5 rounded-full ${isAdmin ? "bg-amber-500" : "bg-emerald-500"} animate-pulse`} />
-            <span className="text-xs font-semibold text-gray-700">
-              {isAdmin ? "Admin System Active" : "Student Session Active"}
+        {/* Mobile Drawer Bottom Section with Profile */}
+        <div className="p-3 border-t border-gray-100 bg-gray-50/50 space-y-2">
+          <NavLink
+            to="/profile"
+            onClick={onCloseMobile}
+            className={({ isActive }) =>
+              `flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                isActive
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "text-gray-700 hover:bg-gray-100"
+              }`
+            }
+          >
+            <div className="w-6 h-6 flex items-center justify-center shrink-0">
+              <UserCircle2 size={19} />
+            </div>
+            <span className="flex-1">My Profile & Settings</span>
+          </NavLink>
+
+          <div className="flex items-center gap-2 px-3.5 pt-1">
+            <div className={`w-2 h-2 rounded-full ${isAdmin ? "bg-amber-500" : "bg-emerald-500"} animate-pulse`} />
+            <span className="text-xs font-semibold text-gray-500">
+              {isAdmin ? "Admin Session Active" : "Student Session Active"}
             </span>
           </div>
         </div>
