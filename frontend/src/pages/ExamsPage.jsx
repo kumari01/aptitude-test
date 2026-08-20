@@ -22,6 +22,7 @@ import StatCard from "../components/common/StatCard";
 import AdminWorkflowVisualizer from "../components/admin/AdminWorkflowVisualizer";
 import CreateTestWizardModal from "../components/admin/CreateTestWizardModal";
 import LiveProctoringMonitorModal from "../components/admin/LiveProctoringMonitorModal";
+import { ExamsSkeleton, StudentExamsSkeleton, AdminExamsSkeleton } from "../components/skeletons";
 
 export function ExamsPage() {
   const navigate = useNavigate();
@@ -216,6 +217,10 @@ export function ExamsPage() {
 
   // ================= ADMIN MANAGED EXAMINATIONS VIEW =================
   if (isAdmin) {
+    if (loading) {
+      return <AdminExamsSkeleton />;
+    }
+
     return (
       <div className="px-4 sm:px-6 md:px-10 py-6 max-w-6xl mx-auto">
         {/* Header */}
@@ -580,6 +585,10 @@ export function ExamsPage() {
   }
 
   // ================= STUDENT ASSIGNED EXAMS VIEW =================
+  if (loading) {
+    return <StudentExamsSkeleton />;
+  }
+
   return (
     <div className="px-4 sm:px-6 md:px-10 py-6 max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
@@ -587,12 +596,7 @@ export function ExamsPage() {
       </h1>
       <p className="text-gray-500 mt-1 mb-6">All assigned aptitude tests, practice modules, and upcoming scheduled exams</p>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-          <Loader2 className="animate-spin mb-3" size={32} />
-          <p className="font-medium">Loading assigned exams...</p>
-        </div>
-      ) : assignedExams.length === 0 ? (
+      {assignedExams.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">
           <FileText size={40} className="mx-auto mb-3 text-gray-300" />
           <h3 className="text-lg font-bold text-gray-900 mb-1" style={{ fontFamily: FONT_DISPLAY }}>
