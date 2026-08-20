@@ -332,10 +332,40 @@ const listStudentAssignedTests = async (req, res) => {
         }
 
         const rollNumber = student.rollno;
-        const assignments = await TestAssignment.find({ rollNumber });
-        const testIds = assignments.map(a => a.testId);
+        const assignments = await TestAssignment.find({
+            $or: [
+                { rollNumber: rollNumber },
+                { rollno: rollNumber },
+                { rollNumber: new RegExp(`^${rollNumber}$`, 'i') },
+                { rollno: new RegExp(`^${rollNumber}$`, 'i') }
+            ]
+        });
+        const assignedTestIds = assignments.map(a => a.testId.toString());
 
-        const tests = await Test.find({ _id: { $in: testIds } });
+        // Also find tests with target "ALL"
+        const allTargets = await TestTarget.find({ targetType: "ALL" });
+        const allTargetTestIds = allTargets.map(t => t.testId.toString());
+
+        let targetedIds = [];
+        if (student.department || student.batch) {
+            const matchingTargets = await TestTarget.find({
+                $or: [
+                    { departments: student.department },
+                    { batches: student.batch }
+                ]
+            });
+            targetedIds = matchingTargets.map(t => t.testId.toString());
+        }
+
+        let combinedIds = Array.from(new Set([...assignedTestIds, ...allTargetTestIds, ...targetedIds]));
+
+        let testQuery = {};
+        if (combinedIds.length > 0) {
+            testQuery = { _id: { $in: combinedIds } };
+        }
+
+        // Return latest exams first
+        const tests = await Test.find(testQuery).sort({ createdAt: -1 });
         const detailedTests = [];
         for (const t of tests) {
             const setting = await TestSetting.findOne({ testId: t._id });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FileText,
@@ -8,11 +8,17 @@ import {
   Award,
   TrendingUp,
   Trophy,
+  ChevronDown,
+  Check,
+  Search,
+  Sparkles,
+  Layers,
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 import AdminDashboardPage from "./AdminDashboardPage";
+import { BaseSkeleton, DashboardSkeleton } from "../components/skeletons";
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -22,6 +28,13 @@ export function DashboardPage() {
   const [totalAssignedCount, setTotalAssignedCount] = useState(0);
   const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardExamTitle, setLeaderboardExamTitle] = useState("");
+  const [leaderboardExams, setLeaderboardExams] = useState([]);
+  const [selectedLeaderboardExamId, setSelectedLeaderboardExamId] = useState("");
+  const [pageLoading, setPageLoading] = useState(true);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [dropdownSearch, setDropdownSearch] = useState("");
+  const dropdownRef = useRef(null);
 
   const isAdmin = !!localStorage.getItem("admin");
 
@@ -53,31 +66,41 @@ export function DashboardPage() {
           const testsList = assignedRes.data.tests;
           const now = new Date();
 
-          // 1. Find active & uncompleted test within current schedule window
-          let activeItem = testsList.find((item) => {
-            const isCompleted = item.attempt?.status && ["Submitted", "Auto Submitted", "Time Expired", "Completed"].includes(item.attempt.status);
-            if (isCompleted) return false;
+          // 1. Prioritize any latest in-progress (Started) exam
+          let activeItem = testsList.find((item) => item.attempt?.status === "Started");
 
-            const startAt = item.schedule?.startAt ? new Date(item.schedule.startAt) : null;
-            const endAt = item.schedule?.endAt ? new Date(item.schedule.endAt) : null;
-            if (startAt && now < startAt) return false;
-            if (endAt && now > endAt) return false;
-            return true;
-          });
-
-          // 2. Or find upcoming uncompleted scheduled test
+          // 2. Or find the latest uncompleted exam within live schedule window
           if (!activeItem) {
             activeItem = testsList.find((item) => {
-              const isCompleted = item.attempt?.status && ["Submitted", "Auto Submitted", "Time Expired", "Completed"].includes(item.attempt.status);
+              const isCompleted = item.attempt?.status && ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(item.attempt.status);
+              if (isCompleted) return false;
+
+              const startAt = item.schedule?.startAt ? new Date(item.schedule.startAt) : null;
+              const endAt = item.schedule?.endAt ? new Date(item.schedule.endAt) : null;
+              if (startAt && now < startAt) return false;
+              if (endAt && now > endAt) return false;
+              return true;
+            });
+          }
+
+          // 3. Or find the latest upcoming scheduled exam
+          if (!activeItem) {
+            activeItem = testsList.find((item) => {
+              const isCompleted = item.attempt?.status && ["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(item.attempt.status);
               if (isCompleted) return false;
               const startAt = item.schedule?.startAt ? new Date(item.schedule.startAt) : null;
               return startAt && now < startAt;
             });
           }
 
-          // 3. Fallback to any uncompleted test, or first test overall
+          // 4. Or find the latest uncompleted exam
           if (!activeItem) {
-            activeItem = testsList.find((item) => !item.attempt?.status || !["Submitted", "Auto Submitted", "Time Expired", "Completed"].includes(item.attempt.status)) || testsList[0];
+            activeItem = testsList.find((item) => !item.attempt?.status || !["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(item.attempt.status));
+          }
+
+          // 5. Fallback to the latest exam overall (first item in latest-sorted array)
+          if (!activeItem) {
+            activeItem = testsList[0];
           }
 
           targetExamId = activeItem.test._id;
@@ -108,6 +131,18 @@ export function DashboardPage() {
               if (lbRes.data.testTitle) {
                 setLeaderboardExamTitle(lbRes.data.testTitle);
               }
+              if (lbRes.data.examId) {
+                setSelectedLeaderboardExamId(lbRes.data.examId);
+              }
+            }
+          })
+          .catch(() => null);
+
+        // Fetch all exams list for leaderboard history dropdown
+        api.get("/leaderboard/exams/list")
+          .then((listRes) => {
+            if (listRes.data?.exams) {
+              setLeaderboardExams(listRes.data.exams);
             }
           })
           .catch(() => null);
@@ -120,14 +155,48 @@ export function DashboardPage() {
         } else if (error.response?.status === 401) {
           navigate("/login");
         }
+      } finally {
+        setPageLoading(false);
       }
     };
 
     fetchData();
   }, [navigate, isAdmin]);
 
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLeaderboardExamChange = async (examId) => {
+    setSelectedLeaderboardExamId(examId);
+    setLeaderboardLoading(true);
+    try {
+      const url = examId ? `/leaderboard/${examId}` : "/leaderboard/latest";
+      const res = await api.get(url);
+      if (res.data) {
+        setLeaderboard(res.data.leaderboard || []);
+        setLeaderboardExamTitle(res.data.testTitle || "");
+      }
+    } catch (err) {
+      console.warn("Failed to switch leaderboard exam:", err);
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  };
+
   if (isAdmin) {
     return <AdminDashboardPage />;
+  }
+
+  if (pageLoading) {
+    return <DashboardSkeleton />;
   }
 
   const handleStartExam = (id) => {
@@ -221,8 +290,8 @@ export function DashboardPage() {
           iconColor="#D97706"
         />
         <StatCard
-          label="Avg Score"
-          value={progress ? progress.avgScore : "0%"}
+          label="Percentile"
+          value={progress ? progress.percentile : "—"}
           icon={<TrendingUp size={17} />}
           iconBg="#DCFCE7"
           iconColor="#16A34A"
@@ -250,19 +319,138 @@ export function DashboardPage() {
       {/* LEADERBOARD & RECENT WEEKS */}
       <div className="grid lg:grid-cols-[1fr_360px] gap-6">
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: FONT_DISPLAY }}>
                 Leaderboard
               </h3>
               <p className="text-xs text-gray-400 font-medium mt-0.5">Top student performers</p>
             </div>
-            <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
-              {leaderboardExamTitle || "Exam Standings"}
-            </span>
+
+            {/* Custom Interactive Exam History Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setDropdownOpen((prev) => !prev)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm ${
+                  dropdownOpen
+                    ? "bg-slate-900 text-white border-slate-900 ring-2 ring-indigo-500/20"
+                    : "bg-white hover:bg-gray-50 text-gray-800 border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <Award size={14} className={dropdownOpen ? "text-amber-400" : "text-indigo-600"} />
+                <span className="max-w-[160px] sm:max-w-[200px] truncate">
+                  {leaderboardExamTitle || "Select Exam Leaderboard"}
+                </span>
+                {liveExam && selectedLeaderboardExamId === liveExam.id && (
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" title="Live Now"></span>
+                )}
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform duration-200 opacity-60 ${dropdownOpen ? "rotate-180 text-white" : "text-gray-500"}`}
+                />
+              </button>
+
+              {/* Dropdown Popover */}
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-50 animate-fade-in origin-top-right">
+                  <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      Exam Leaderboard History
+                    </span>
+                    <span className="text-[10px] font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+                      {leaderboardExams.length} Exams
+                    </span>
+                  </div>
+
+                  {leaderboardExams.length > 4 && (
+                    <div className="px-2 py-1.5 mb-1">
+                      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs text-gray-600 focus-within:border-indigo-500 focus-within:bg-white transition-all">
+                        <Search size={13} className="text-gray-400 shrink-0" />
+                        <input
+                          type="text"
+                          value={dropdownSearch}
+                          onChange={(e) => setDropdownSearch(e.target.value)}
+                          placeholder="Search exam title..."
+                          className="w-full bg-transparent outline-none text-xs text-gray-800 placeholder-gray-400"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="max-h-64 overflow-y-auto space-y-1 p-1 scrollbar-thin">
+                    {leaderboardExams
+                      .filter((e) => !dropdownSearch || e.title.toLowerCase().includes(dropdownSearch.toLowerCase()))
+                      .map((examItem) => {
+                        const isSelected = selectedLeaderboardExamId === examItem._id;
+                        const isCurrentLiveExam = liveExam && (liveExam.id === examItem._id);
+
+                        return (
+                          <button
+                            key={examItem._id}
+                            onClick={() => {
+                              handleLeaderboardExamChange(examItem._id);
+                              setDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-indigo-50 text-indigo-900 font-bold"
+                                : "hover:bg-gray-50 text-gray-700 font-medium"
+                            }`}
+                          >
+                            <div className="min-w-0 pr-2">
+                              <div className="flex items-center gap-2">
+                                <span className="truncate text-xs text-gray-900 font-semibold">{examItem.title}</span>
+                                {isCurrentLiveExam && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.2 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                                    LIVE NOW
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
+                                <span>{examItem.totalQuestions || 10} Questions</span>
+                                <span>•</span>
+                                <span className={examItem.submissionCount > 0 ? "text-emerald-600 font-medium" : "text-gray-400"}>
+                                  {examItem.submissionCount} {examItem.submissionCount === 1 ? "submission" : "submissions"}
+                                </span>
+                              </div>
+                            </div>
+                            {isSelected && <Check size={14} className="text-indigo-600 shrink-0" />}
+                          </button>
+                        );
+                      })}
+
+                    {leaderboardExams.length === 0 && (
+                      <p className="text-xs text-gray-400 py-3 text-center">No past exams found.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          {leaderboard.length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">No leaderboard entries available yet.</p>
+
+          {leaderboardLoading ? (
+            <div className="space-y-2 pt-1">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-gray-50/60"
+                >
+                  <div className="flex items-center gap-3">
+                    <BaseSkeleton className="w-7 h-7 rounded-full shrink-0" />
+                    <div className="space-y-1">
+                      <BaseSkeleton className="h-4 w-28 sm:w-36" />
+                      <BaseSkeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                  <BaseSkeleton className="h-5 w-12 rounded-md" />
+                </div>
+              ))}
+            </div>
+          ) : leaderboard.length === 0 ? (
+            <p className="text-sm text-gray-400 py-6 text-center">No leaderboard entries available for this exam yet.</p>
           ) : (
             <div className="space-y-1">
               {leaderboard.map((p, idx) => (

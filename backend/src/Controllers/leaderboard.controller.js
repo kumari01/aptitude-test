@@ -270,9 +270,42 @@ const getStudentRank = async (req, res) => {
     }
 };
 
+/*
+    GET /api/leaderboard/exams/list
+
+    Get list of exams for the leaderboard history dropdown
+*/
+const getLeaderboardExams = async (req, res) => {
+    try {
+        const tests = await Exam.find().sort({ createdAt: -1 });
+        const list = [];
+
+        for (const t of tests) {
+            const submissionCount = await ExamAttempt.countDocuments({
+                $or: [{ testId: t._id }, { exam_id: t._id }],
+                status: { $in: ["Submitted", "Completed", "Auto Submitted"] }
+            });
+
+            list.push({
+                _id: t._id,
+                title: t.title,
+                testType: t.testType || "Aptitude",
+                totalQuestions: t.totalQuestions || 10,
+                submissionCount,
+                createdAt: t.createdAt
+            });
+        }
+
+        res.status(200).json({ exams: list });
+    } catch (error) {
+        console.error("Error fetching leaderboard exams list:", error);
+        res.status(500).json({ message: "Failed to fetch leaderboard exams list" });
+    }
+};
 
 module.exports = {
     generateLeaderboard,
     getLeaderboard,
-    getStudentRank
+    getStudentRank,
+    getLeaderboardExams
 };

@@ -2,11 +2,15 @@ const express = require("express");
 
 const {
     getLeaderboard,
-    getStudentRank
+    getStudentRank,
+    getLeaderboardExams
 } = require("../Controllers/leaderboard.controller");
 
 const router = express.Router();
 
+
+// Get list of exams with leaderboard history
+router.get("/exams/list", getLeaderboardExams);
 
 // Get complete leaderboard (specific exam, latest, or root)
 router.get("/", getLeaderboard);
