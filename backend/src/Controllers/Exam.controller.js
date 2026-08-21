@@ -17,7 +17,8 @@ const createExam = async (req, res) => {
             testType: testType || "Aptitude",
             status: "Published",
             totalMarks: totalMarks || total_marks || 0,
-            maxAttempts: maxAttempts || 1
+            maxAttempts: maxAttempts || 1,
+            createdBy: req.user?.id
         });
 
         await test.save();
@@ -35,6 +36,13 @@ const createExam = async (req, res) => {
 const startExam = async (req, res) => {
     try {
         const { examId } = req.params;
+
+        if (req.user?.role === "admin") {
+            return res.status(403).json({
+                message: "Admin accounts cannot start or take examinations"
+            });
+        }
+
         // Use authenticated student identity from JWT, not client-supplied studentId
         const studentId = req.user.id;
 
