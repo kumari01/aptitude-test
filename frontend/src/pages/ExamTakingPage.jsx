@@ -50,6 +50,33 @@ export function ExamTakingPage() {
   const isWarningActiveRef = useRef(false);
   const warningGraceUntilRef = useRef(0);
 
+  // High-performance batch answer synchronization buffer
+  const uncommittedAnswersRef = useRef(new Map());
+  const debounceSaveTimeoutRef = useRef(null);
+
+  const flushUncommittedAnswers = async () => {
+    const currAttemptId = attemptIdRef.current || attemptId;
+    if (!currAttemptId || uncommittedAnswersRef.current.size === 0) return;
+
+    const answersToSave = [];
+    for (const [questionId, selectedOptionId] of uncommittedAnswersRef.current.entries()) {
+      answersToSave.push({ questionId, selectedOptionId });
+    }
+    uncommittedAnswersRef.current.clear();
+
+    try {
+      await api.post("/answers/batch-save", {
+        attemptId: currAttemptId,
+        answers: answersToSave
+      });
+    } catch (err) {
+      console.warn("Batch save error, re-queueing for next sync cycle:", err);
+      for (const a of answersToSave) {
+        uncommittedAnswersRef.current.set(a.questionId, a.selectedOptionId);
+      }
+    }
+  };
+
   useEffect(() => { answersRef.current = answers; }, [answers]);
   useEffect(() => { questionsRef.current = questions; }, [questions]);
   useEffect(() => { examRef.current = exam; }, [exam]);
@@ -341,6 +368,10 @@ export function ExamTakingPage() {
     setSubmitting(true);
     if (timerRef.current) clearInterval(timerRef.current);
     if (modalTimerRef.current) clearInterval(modalTimerRef.current);
+    if (debounceSaveTimeoutRef.current) clearTimeout(debounceSaveTimeoutRef.current);
+
+    // Flush any pending uncommitted answers before finalizing submission
+    await flushUncommittedAnswers();
 
     // End proctoring session cleanly on submission
     if (proctoringSessionId) {
@@ -582,21 +613,35 @@ export function ExamTakingPage() {
   const isCurrentAnswered = answers[current] !== undefined;
   const isLast = current === questions.length - 1;
 
-  async function selectOption(qIndex, optIndex) {
-    setAnswers((prev) => ({ ...prev, [qIndex]: optIndex }));
+  // Periodic background batch autosave (every 25s) to guarantee zero data loss
+  useEffect(() => {
+    if (!attemptId) return;
+    const autosaveInterval = setInterval(() => {
+      flushUncommittedAnswers();
+    }, 25000);
+    return () => clearInterval(autosaveInterval);
+  }, [attemptId]);
 
-    // Save answer to backend if attemptId is present
-    const qObj = questions[qIndex];
-    if (attemptId && qObj?.id && qObj?.rawOptions?.[optIndex]?._id) {
-      try {
-        await api.post("/answers/save", {
-          attemptId,
-          questionId: qObj.id,
-          selectedOptionId: qObj.rawOptions[optIndex]._id,
-        });
-      } catch (err) {
-        console.warn("Failed to persist student answer to backend:", err);
+  async function selectOption(qIndex, optIndex) {
+    setAnswers((prev) => {
+      const updated = { ...prev, [qIndex]: optIndex };
+      if (attemptId) {
+        try {
+          localStorage.setItem(`exam_answers_${attemptId}`, JSON.stringify(updated));
+        } catch (e) {}
       }
+      return updated;
+    });
+
+    const qObj = questions[qIndex];
+    if (qObj?.id && qObj?.rawOptions?.[optIndex]?._id) {
+      uncommittedAnswersRef.current.set(qObj.id, qObj.rawOptions[optIndex]._id);
+
+      // Debounce auto-sync after 3.5 seconds of student idle time
+      if (debounceSaveTimeoutRef.current) clearTimeout(debounceSaveTimeoutRef.current);
+      debounceSaveTimeoutRef.current = setTimeout(() => {
+        flushUncommittedAnswers();
+      }, 3500);
     }
   }
 
