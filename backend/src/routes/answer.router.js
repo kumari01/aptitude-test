@@ -3,8 +3,11 @@ const router = express.Router();
 const answerController = require("../Controllers/answer.controller");
 const authenticate = require("../Middleware/auth.middleware");
 
-// Save or update student answer for a question
+// Save or update student answer for a question (single)
 router.post("/save", authenticate, answerController.saveStudentAnswer);
+
+// Batch save multiple student answers (high-concurrency optimization)
+router.post("/batch-save", authenticate, answerController.batchSaveStudentAnswers);
 
 // Get student's current saved answers for an attempt
 router.get("/attempt/:attemptId", authenticate, answerController.getStudentAnswers);

@@ -85,7 +85,7 @@ const generateLeaderboard = async (examId) => {
 
         let previousScore = null;
         let currentRank = 0;
-        const leaderboardData = [];
+        const entriesToInsert = [];
 
         for (let i = 0; i < uniqueAttempts.length; i++) {
             const attempt = uniqueAttempts[i];
@@ -99,7 +99,7 @@ const generateLeaderboard = async (examId) => {
                 Math.min(100, Math.max(0, (rawScore / totalMarks) * 100)).toFixed(2)
             );
 
-            const entry = new Leaderboard({
+            entriesToInsert.push({
                 exam_id: examObjId,
                 testId: examObjId,
                 attempt_id: attempt._id,
@@ -109,12 +109,15 @@ const generateLeaderboard = async (examId) => {
                 rank: currentRank
             });
 
-            await entry.save();
-            leaderboardData.push(entry);
             previousScore = rawScore;
         }
 
-        return leaderboardData;
+        if (entriesToInsert.length > 0) {
+            const created = await Leaderboard.insertMany(entriesToInsert, { ordered: false });
+            return created;
+        }
+
+        return [];
     } catch (error) {
         console.error("Error generating leaderboard:", error);
         return [];

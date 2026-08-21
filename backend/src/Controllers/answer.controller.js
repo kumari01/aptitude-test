@@ -86,6 +86,59 @@ const saveStudentAnswer = async (req, res) => {
     }
 };
 
+// Batch save student answers (reduces 50 individual requests down to 1 bulk database write)
+const batchSaveStudentAnswers = async (req, res) => {
+    try {
+        const { attemptId, answers } = req.body;
+
+        if (!attemptId || !Array.isArray(answers) || answers.length === 0) {
+            return res.status(400).json({
+                message: 'attemptId and non-empty answers array are required'
+            });
+        }
+
+        const attempt = await ExamAttempt.findById(attemptId);
+        if (!attempt) {
+            return res.status(404).json({ message: 'Attempt not found' });
+        }
+
+        if (attempt.student_id.toString() !== req.user.id) {
+            return res.status(403).json({ message: 'Forbidden: You do not own this attempt' });
+        }
+
+        if (["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status)) {
+            return res.status(400).json({ message: 'Attempt is not active' });
+        }
+
+        // Build bulkWrite operations for atomic batch upsert
+        const validOps = answers
+            .filter(a => a.questionId && a.selectedOptionId)
+            .map(a => ({
+                updateOne: {
+                    filter: { attempt_id: attemptId, question_id: a.questionId },
+                    update: { $set: { selected_option_id: a.selectedOptionId } },
+                    upsert: true
+                }
+            }));
+
+        if (validOps.length === 0) {
+            return res.status(400).json({ message: 'No valid answers provided in array' });
+        }
+
+        const bulkResult = await studentAnswerSchema.bulkWrite(validOps);
+
+        res.status(200).json({
+            message: 'Batch answers saved successfully',
+            matchedCount: bulkResult.matchedCount,
+            upsertedCount: bulkResult.upsertedCount,
+            modifiedCount: bulkResult.modifiedCount
+        });
+    } catch (err) {
+        console.error('Error batch saving student answers:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
 // Retrieve student answers for an attempt
 const getStudentAnswers = async (req, res) => {
     try {
@@ -152,8 +205,15 @@ const submitExam = async (req, res) => {
             submissionType || "Submitted"
         );
 
-        // Update leaderboard after successful submission
-        await generateLeaderboard(result.attempt.exam_id);
+        // Update leaderboard asynchronously without blocking response
+        const targetExamId = result.attempt.exam_id || result.attempt.testId;
+        if (targetExamId) {
+            setImmediate(() => {
+                generateLeaderboard(targetExamId).catch(err => {
+                    console.warn("Background leaderboard update error:", err.message);
+                });
+            });
+        }
 
         return res.status(200).json({
             message: "Exam submitted successfully",
@@ -331,4 +391,4 @@ const getResults = async (req, res) => {
     }
 };
 
-module.exports = { saveStudentAnswer, getStudentAnswers, submitExam, getResults };
+module.exports = { saveStudentAnswer, batchSaveStudentAnswers, getStudentAnswers, submitExam, getResults };
