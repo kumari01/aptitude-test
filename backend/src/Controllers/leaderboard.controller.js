@@ -64,10 +64,8 @@ const generateLeaderboard = async (examId) => {
 
         let totalMarks = exam.totalMarks || 0;
         if (!totalMarks || totalMarks <= 0) {
-            const Question = require("../model/question.model");
-            const qList = await Question.find({
-                $or: [{ testId: examId }, { exam_id: examId }, { testId: examObjId }, { exam_id: examObjId }]
-            });
+            const { getTestQuestions } = require("../utils/questionservice");
+            const qList = await getTestQuestions(examId, { includeAnswerKey: true });
             if (qList.length > 0) {
                 totalMarks = qList.reduce((sum, q) => sum + (q.marks || 1), 0);
                 try {
@@ -78,18 +76,15 @@ const generateLeaderboard = async (examId) => {
             }
         }
 
-        // Clear old entries for this exam before inserting fresh rankings
-        await Leaderboard.deleteMany({
-            $or: [{ exam_id: examId }, { testId: examId }, { exam_id: examObjId }, { testId: examObjId }]
-        });
-
         let previousScore = null;
         let currentRank = 0;
-        const entriesToInsert = [];
+        const bulkOps = [];
+        const activeAttemptIds = [];
 
         for (let i = 0; i < uniqueAttempts.length; i++) {
             const attempt = uniqueAttempts[i];
             const rawScore = Math.max(attempt.score || 0, attempt.obtainedMarks || 0);
+            activeAttemptIds.push(attempt._id);
 
             if (rawScore !== previousScore) {
                 currentRank = i + 1;
@@ -99,7 +94,7 @@ const generateLeaderboard = async (examId) => {
                 Math.min(100, Math.max(0, (rawScore / totalMarks) * 100)).toFixed(2)
             );
 
-            entriesToInsert.push({
+            const docData = {
                 exam_id: examObjId,
                 testId: examObjId,
                 attempt_id: attempt._id,
@@ -107,14 +102,27 @@ const generateLeaderboard = async (examId) => {
                 score: rawScore,
                 percentage: percentage,
                 rank: currentRank
+            };
+
+            bulkOps.push({
+                updateOne: {
+                    filter: { exam_id: examObjId, student_id: attempt.student_id },
+                    update: { $set: docData },
+                    upsert: true
+                }
             });
 
             previousScore = rawScore;
         }
 
-        if (entriesToInsert.length > 0) {
-            const created = await Leaderboard.insertMany(entriesToInsert, { ordered: false });
-            return created;
+        if (bulkOps.length > 0) {
+            await Leaderboard.bulkWrite(bulkOps);
+            // Remove any orphan entries not matching current attempts
+            await Leaderboard.deleteMany({
+                exam_id: examObjId,
+                attempt_id: { $nin: activeAttemptIds }
+            });
+            return await Leaderboard.find({ exam_id: examObjId }).sort({ rank: 1 });
         }
 
         return [];
@@ -197,6 +205,8 @@ const getLeaderboard = async (req, res) => {
             return {
                 _id: entry._id,
                 rank: entry.rank,
+                attempt_id: entry.attempt_id,
+                attemptId: entry.attempt_id,
                 score: Math.round(entry.percentage || 0),
                 percentage: entry.percentage,
                 rawScore: entry.score,
