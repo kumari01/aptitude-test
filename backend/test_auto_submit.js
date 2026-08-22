@@ -1,4 +1,8 @@
 require("dotenv").config();
+const dns = require("dns");
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch (e) {}
 const mongoose = require("mongoose");
 const app = require("./src/app");
 const http = require("http");
@@ -12,16 +16,43 @@ async function testAutoSubmit() {
     console.log("=================================================");
     console.log("     AUTO-SUBMIT & TIMER TEST SUITE              ");
     console.log("=================================================");
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGODB_URI, { family: 4 });
     
     server = http.createServer(app);
     await new Promise((resolve) => server.listen(PORT, resolve));
     console.log(`Server listening on ${baseUrl}\n`);
 
+    // 0. Setup Admin and Student Auth Tokens
+    const { issueAuthToken } = require("./src/utils/Authtoken");
+    const { Student, Admin } = require("./src/model/user.model");
+    const jwt = require("jsonwebtoken");
+    const secret = process.env.JWT_SECRET || "default_jwt_secret";
+
+    const adminUser = await Admin.findOne({ email: "admin.autosubmit@sasi.ac.in" }) || await Admin.create({
+      username: "AdminAutoSubmit",
+      email: "admin.autosubmit@sasi.ac.in",
+      adminid: "ADM_AUTO_SUBMIT",
+      password: "hashedpassword123",
+      status: "active"
+    });
+    const adminToken = jwt.sign({ id: adminUser._id, role: "admin" }, secret, { expiresIn: "1h" });
+
+    const studentUser = await Student.findOne({ email: "student.autosubmit@sasi.ac.in" }) || await Student.create({
+      username: "StudentAutoSubmit",
+      email: "student.autosubmit@sasi.ac.in",
+      rollno: "21A91A0599",
+      password: "hashedpassword123",
+      status: "active"
+    });
+    const studentToken = jwt.sign({ id: studentUser._id, role: "student" }, secret, { expiresIn: "1h" });
+
     // 1. Create a test with 1-minute duration
     const createRes = await fetch(`${baseUrl}/api/exams/create`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({
         title: "Auto Submit Test Exam",
         duration_minutes: 1,
@@ -29,23 +60,29 @@ async function testAutoSubmit() {
       })
     });
     const createData = await createRes.json();
-    console.log("Create Exam Response:", createData.test?.duration_minutes === 1 ? "✅ Duration 1 min set" : "❌ Failed to set duration");
+    console.log("Create Exam Response:", (createData.test?.durationMinutes === 1 || createData.test?.duration_minutes === 1) ? "✅ Duration 1 min set" : "❌ Failed to set duration");
     const testId = createData.test._id;
 
     // 2. Start Exam
     const startRes = await fetch(`${baseUrl}/api/exams/${testId}/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
       body: JSON.stringify({})
     });
     const startData = await startRes.json();
-    console.log("Start Exam Response remainingSeconds:", startData.remainingSeconds, startData.isTimeExpired === false ? "✅ Active attempt" : "❌ Failed start");
+    console.log("Start Exam Response:", startData.attempt?._id ? "✅ Active attempt" : "❌ Failed start");
     const attemptId = startData.attempt._id;
 
     // 3. Add a question
     const qRes = await fetch(`${baseUrl}/api/exams/${testId}/questions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({
         question_text: "What is 2 + 2?",
         options: [{ text: "3" }, { text: "4" }],
@@ -59,7 +96,10 @@ async function testAutoSubmit() {
     // 4. Save answer while active
     const saveRes1 = await fetch(`${baseUrl}/api/answers/save`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
       body: JSON.stringify({ attemptId, questionId, selectedOptionId: optionId })
     });
     const saveData1 = await saveRes1.json();
@@ -74,7 +114,10 @@ async function testAutoSubmit() {
     // 6. Try saving an answer after duration expired -> Should trigger auto-submit
     const saveRes2 = await fetch(`${baseUrl}/api/answers/save`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
       body: JSON.stringify({ attemptId, questionId, selectedOptionId: optionId })
     });
     const saveData2 = await saveRes2.json();

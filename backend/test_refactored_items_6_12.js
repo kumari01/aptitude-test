@@ -1,4 +1,8 @@
 require("dotenv").config();
+const dns = require("dns");
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch (e) {}
 const mongoose = require("mongoose");
 const app = require("./src/app");
 const http = require("http");
@@ -12,17 +16,42 @@ async function testRefactoredItems6to12() {
     console.log("=================================================");
     console.log("   REFACTORED ITEMS 6-12 VERIFICATION SUITE      ");
     console.log("=================================================");
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGODB_URI, { family: 4 });
 
     server = http.createServer(app);
     await new Promise((resolve) => server.listen(PORT, resolve));
     console.log(`Server running on ${baseUrl}\n`);
 
+    const { Student, Admin } = require("./src/model/user.model");
+    const jwt = require("jsonwebtoken");
+    const secret = process.env.JWT_SECRET || "default_jwt_secret";
+
+    const adminUser = await Admin.findOne({ email: "admin.items612@sasi.ac.in" }) || await Admin.create({
+      username: "AdminItems612",
+      email: "admin.items612@sasi.ac.in",
+      adminid: "ADM_ITEMS_612",
+      password: "hashedpassword123",
+      status: "active"
+    });
+    const adminToken = jwt.sign({ id: adminUser._id, role: "admin" }, secret, { expiresIn: "1h" });
+
+    const studentUser = await Student.findOne({ email: "student.items612@sasi.ac.in" }) || await Student.create({
+      username: "StudentItems612",
+      email: "student.items612@sasi.ac.in",
+      rollno: "21A12A9999",
+      password: "hashedpassword123",
+      status: "active"
+    });
+    const studentToken = jwt.sign({ id: studentUser._id, role: "student" }, secret, { expiresIn: "1h" });
+
     // 1. Test creation with totalMarks (Item 10)
     console.log("--- Item 10: totalMarks Standardization ---");
     const createRes = await fetch(`${baseUrl}/api/exams/create`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({
         title: "Section & Marks Test Exam",
         duration_minutes: 30,
@@ -37,7 +66,10 @@ async function testRefactoredItems6to12() {
     console.log("\n--- Item 11 & 12: testId Standardization & question.marks Grading ---");
     const qRes = await fetch(`${baseUrl}/api/exams/${testId}/questions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({
         question_text: "What is 100 / 10?",
         options: [{ text: "5" }, { text: "10" }],
@@ -54,7 +86,10 @@ async function testRefactoredItems6to12() {
     console.log("\n--- Item 6: Section-Based Question Loading ---");
     const secRes = await fetch(`${baseUrl}/api/test-management/${testId}/sections`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({ name: "Math Section", displayOrder: 1 })
     });
     const secData = await secRes.json();
@@ -62,17 +97,23 @@ async function testRefactoredItems6to12() {
 
     await fetch(`${baseUrl}/api/test-management/sections/${sectionId}/questions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({ questionId, displayOrder: 1, marks: 3 })
     });
 
     const startRes = await fetch(`${baseUrl}/api/exams/${testId}/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
       body: JSON.stringify({})
     });
     const startData = await startRes.json();
-    console.log(startData.questions?.length > 0 && startData.questions[0]._id === questionId
+    console.log(startData.questions?.length > 0 && startData.questions[0]._id.toString() === questionId.toString()
       ? "✅ [PASS] Questions loaded via Sections -> SectionQuestions -> Questions"
       : "❌ [FAIL] Section-based question loading failed");
     const attemptId = startData.attempt._id;
@@ -80,12 +121,18 @@ async function testRefactoredItems6to12() {
     // 4. Save answer and submit -> Test weighted score calculation
     await fetch(`${baseUrl}/api/answers/save`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
       body: JSON.stringify({ attemptId, questionId, selectedOptionId: correctOptionId })
     });
     const submitRes = await fetch(`${baseUrl}/api/answers/submit`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
       body: JSON.stringify({ attemptId })
     });
     const submitData = await submitRes.json();
@@ -104,14 +151,21 @@ async function testRefactoredItems6to12() {
     const testRollno = "21A12A9999";
     const schedRes = await fetch(`${baseUrl}/api/test-management/${testId}/schedule`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({
         startAt: new Date(Date.now() - 60000),
         endAt: new Date(Date.now() + 3600000),
         studentRollNumbers: [testRollno]
       })
     });
-    const assignRes = await fetch(`${baseUrl}/api/test-management/student/assigned?rollno=${testRollno}`);
+    const assignRes = await fetch(`${baseUrl}/api/test-management/student/assigned`, {
+      headers: {
+        "Authorization": `Bearer ${studentToken}`
+      }
+    });
     const assignData = await assignRes.json();
     console.log(assignRes.status === 200 && assignData.tests?.length > 0
       ? "✅ [PASS] Test assignment queried using rollno"

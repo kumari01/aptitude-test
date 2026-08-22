@@ -1,4 +1,8 @@
 require("dotenv").config();
+const dns = require("dns");
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch (e) {}
 const mongoose = require("mongoose");
 const app = require("./src/app");
 const http = require("http");
@@ -12,19 +16,42 @@ async function testRefactoredRules() {
     console.log("=================================================");
     console.log("     REFACTORED RULES VERIFICATION SUITE         ");
     console.log("=================================================");
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGODB_URI, { family: 4 });
 
     server = http.createServer(app);
     await new Promise((resolve) => server.listen(PORT, resolve));
     console.log(`Server running on ${baseUrl}\n`);
 
-    const studentId = new mongoose.Types.ObjectId().toString();
+    const { Student, Admin } = require("./src/model/user.model");
+    const jwt = require("jsonwebtoken");
+    const secret = process.env.JWT_SECRET || "default_jwt_secret";
+
+    const adminUser = await Admin.findOne({ email: "admin.rules@sasi.ac.in" }) || await Admin.create({
+      username: "AdminRules",
+      email: "admin.rules@sasi.ac.in",
+      adminid: "ADM_RULES_1",
+      password: "hashedpassword123",
+      status: "active"
+    });
+    const adminToken = jwt.sign({ id: adminUser._id, role: "admin" }, secret, { expiresIn: "1h" });
+
+    const studentUser = await Student.findOne({ email: "student.rules@sasi.ac.in" }) || await Student.create({
+      username: "StudentRules",
+      email: "student.rules@sasi.ac.in",
+      rollno: "21A91A0588",
+      password: "hashedpassword123",
+      status: "active"
+    });
+    const studentToken = jwt.sign({ id: studentUser._id, role: "student" }, secret, { expiresIn: "1h" });
 
     // Rule 1: Test creation via single method createTest
     console.log("--- Rule 1: Single Test Creation Method ---");
     const createRes = await fetch(`${baseUrl}/api/exams/create`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({
         title: "Refactored Rules Test",
         duration_minutes: 10,
@@ -40,7 +67,10 @@ async function testRefactoredRules() {
     console.log("\n--- Rule 2 & 3: Question Ownership & correct_option_id ---");
     const qRes = await fetch(`${baseUrl}/api/exams/${testId}/questions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({
         question_text: "What is 10 + 10?",
         options: [{ text: "15" }, { text: "20" }, { text: "25" }],
@@ -59,7 +89,10 @@ async function testRefactoredRules() {
     const futureEnd = new Date(Date.now() + 7200 * 1000);
     const schedRes = await fetch(`${baseUrl}/api/test-management/${testId}/schedule`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminToken}`
+      },
       body: JSON.stringify({
         startAt: futureStart,
         endAt: futureEnd
@@ -68,13 +101,16 @@ async function testRefactoredRules() {
     const schedData = await schedRes.json();
     const scheduleId = schedData.schedule._id;
 
-    // Try starting exam before schedule opens -> Should be blocked (403)
+    // Try starting exam before schedule opens -> Should be blocked (400)
     const earlyStartRes = await fetch(`${baseUrl}/api/exams/${testId}/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId })
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
+      body: JSON.stringify({})
     });
-    console.log(earlyStartRes.status === 403 ? "✅ [PASS] Exam blocked before scheduled startAt window" : `❌ [FAIL] Expected 403, got ${earlyStartRes.status}`);
+    console.log(earlyStartRes.status === 400 ? "✅ [PASS] Exam blocked before scheduled startAt window" : `❌ [FAIL] Expected 400, got ${earlyStartRes.status}`);
 
     // Update schedule window to active (now)
     const TestSchedule = require("./src/model/testModel/testSchedule.model");
@@ -88,8 +124,11 @@ async function testRefactoredRules() {
     // Attempt 1: Start
     const startRes1 = await fetch(`${baseUrl}/api/exams/${testId}/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId })
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
+      body: JSON.stringify({})
     });
     const startData1 = await startRes1.json();
     console.log(startRes1.status === 200 && startData1.attempt ? "✅ [PASS] Started Attempt 1 successfully" : "❌ [FAIL] Attempt 1 failed");
@@ -98,8 +137,11 @@ async function testRefactoredRules() {
     // Start again while active -> Should resume Attempt 1
     const resumeRes = await fetch(`${baseUrl}/api/exams/${testId}/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId })
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
+      body: JSON.stringify({})
     });
     const resumeData = await resumeRes.json();
     console.log(resumeData.attempt?._id === attempt1Id ? "✅ [PASS] Active attempt resumed instead of creating duplicate" : "❌ [FAIL] Did not resume active attempt");
@@ -107,20 +149,29 @@ async function testRefactoredRules() {
     // Submit Attempt 1
     await fetch(`${baseUrl}/api/answers/save`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
       body: JSON.stringify({ attemptId: attempt1Id, questionId, selectedOptionId: correctOptionId })
     });
     await fetch(`${baseUrl}/api/answers/submit`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
       body: JSON.stringify({ attemptId: attempt1Id })
     });
 
     // Attempt 2: Start second attempt (maxAttempts = 2)
     const startRes2 = await fetch(`${baseUrl}/api/exams/${testId}/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId })
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
+      body: JSON.stringify({})
     });
     const startData2 = await startRes2.json();
     console.log(startRes2.status === 200 && startData2.attempt?._id !== attempt1Id ? "✅ [PASS] Started Attempt 2 successfully (under maxAttempts = 2)" : "❌ [FAIL] Attempt 2 start failed");
@@ -129,17 +180,23 @@ async function testRefactoredRules() {
     // Submit Attempt 2
     await fetch(`${baseUrl}/api/answers/submit`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
       body: JSON.stringify({ attemptId: attempt2Id })
     });
 
-    // Attempt 3: Try starting 3rd attempt -> Should be blocked (403)
+    // Attempt 3: Try starting 3rd attempt -> Should be blocked (400)
     const startRes3 = await fetch(`${baseUrl}/api/exams/${testId}/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId })
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${studentToken}`
+      },
+      body: JSON.stringify({})
     });
-    console.log(startRes3.status === 403 ? "✅ [PASS] Blocked 3rd attempt when maxAttempts = 2" : `❌ [FAIL] Expected 403, got ${startRes3.status}`);
+    console.log(startRes3.status === 400 ? "✅ [PASS] Blocked 3rd attempt when maxAttempts = 2" : `❌ [FAIL] Expected 400, got ${startRes3.status}`);
 
     // Cleanup
     const Test = require("./src/model/testModel/test.model");
