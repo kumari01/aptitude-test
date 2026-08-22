@@ -14,18 +14,40 @@ const ProctoringEvent = require("../model/proctoring/proctoringEvent");
 // Create a new test with settings & target group
 const createTest = async (req, res) => {
     try {
-        const { title, testType, maxAttempts, createdBy, proctoringEnabled, tabSwitchLimit, autoSubmit, targetType, departments, batches, studentRollNumbers } = req.body;
+        const {
+            title,
+            testType,
+            category,
+            durationMinutes,
+            duration_minutes,
+            totalMarks,
+            total_marks,
+            maxAttempts,
+            createdBy,
+            proctoringEnabled,
+            tabSwitchLimit,
+            autoSubmit,
+            targetType,
+            departments,
+            batches,
+            studentRollNumbers
+        } = req.body;
 
         if (!title) {
             return res.status(400).json({ message: "Test title is required" });
         }
 
+        const duration = Number(durationMinutes || duration_minutes) || 30;
+        const marks = Number(totalMarks || total_marks) || 0;
+
         const test = new Test({
             title,
-            testType: testType || "Aptitude",
+            testType: testType || category || "Aptitude",
             status: "Draft",
-            maxAttempts: maxAttempts || 1,
-            createdBy
+            durationMinutes: duration,
+            totalMarks: marks,
+            maxAttempts: maxAttempts ? Number(maxAttempts) : 1,
+            createdBy: req.user?.id || createdBy
         });
         await test.save();
 
