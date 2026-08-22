@@ -44,15 +44,10 @@ const createQuestion = async(req,res) =>{
 
 const getQuestions = async(req,res)=>{
     try{
-        //retrieve all questions for a specific exam
+        //retrieve all questions for a specific exam using unified questionservice
         const examId = req.params.examId || req.query?.exam_id || req.body?.exam_id;
-        const questions = await questionModel.find(
-            { $or: [{ testId: examId }, { exam_id: examId }] },
-            {
-                correct_option_id: 0,
-                __v: 0
-            }
-        );
+        const { getTestQuestions } = require("../utils/questionservice");
+        const questions = await getTestQuestions(examId, { includeAnswerKey: false });
         res.status(200).json({ questions });
     }
     catch(error){

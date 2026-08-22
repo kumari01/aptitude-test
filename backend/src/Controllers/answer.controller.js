@@ -40,27 +40,42 @@ const saveStudentAnswer = async (req, res) => {
             });
         }
 
-        // Check if question exists
-        let question = await questionModel.findById(questionId);
-        if (!question) {
-            question = await SectionQuestion.findById(questionId);
+        // Check if attempt duration has expired -> auto-submit if time expired
+        const { checkAttemptTiming } = require("../utils/timeHelper");
+        const Test = require("../model/testModel/test.model");
+        const targetTestDoc = await Test.findById(attempt.testId || attempt.exam_id);
+        const durationMin = targetTestDoc?.durationMinutes || targetTestDoc?.duration_minutes || 30;
+        const timing = checkAttemptTiming(attempt, durationMin);
+
+        if (timing.isExpired) {
+            await submitAttempt(attemptId, "Time Expired");
+            return res.status(200).json({
+                message: 'Exam duration has expired. Attempt has been automatically submitted.',
+                isTimeExpired: true,
+                status: "Time Expired"
+            });
         }
+
+        // Check if question exists using unified single question resolver
+        const { getSingleQuestion } = require("../utils/questionservice");
+        const question = await getSingleQuestion(questionId, { includeAnswerKey: true });
         if (!question) {
             return res.status(404).json({
                 message: 'Question not found'
             });
         }
 
-        const targetTestId = attempt.testId || attempt.exam_id;
-        const questionTestId = question.testId || question.exam_id;
-        if (targetTestId && questionTestId && questionTestId.toString() !== targetTestId.toString()) {
+        const targetTestId = (attempt.testId || attempt.exam_id)?.toString();
+        const questionTestId = (question.testId || question.exam_id)?.toString();
+        if (targetTestId && questionTestId && questionTestId !== targetTestId) {
             return res.status(400).json({
                 message: 'Question does not belong to this exam attempt'
             });
         }
 
         // Check if selected option is valid for this question
-        const optionExists = question.options.some(option => option._id.toString() === selectedOptionId);
+        const optionsList = question.options || [];
+        const optionExists = optionsList.some(option => (option._id ? option._id.toString() : option.id ? option.id.toString() : option.text) === selectedOptionId.toString());
         if (!optionExists) {
             return res.status(400).json({
                 message: 'Selected option does not belong to the question'
@@ -108,6 +123,22 @@ const batchSaveStudentAnswers = async (req, res) => {
 
         if (["Submitted", "Auto Submitted", "Disqualified", "Time Expired", "Completed"].includes(attempt.status)) {
             return res.status(400).json({ message: 'Attempt is not active' });
+        }
+
+        // Check if attempt duration has expired -> auto-submit if time expired
+        const { checkAttemptTiming } = require("../utils/timeHelper");
+        const Test = require("../model/testModel/test.model");
+        const targetTestDoc = await Test.findById(attempt.testId || attempt.exam_id);
+        const durationMin = targetTestDoc?.durationMinutes || targetTestDoc?.duration_minutes || 30;
+        const timing = checkAttemptTiming(attempt, durationMin);
+
+        if (timing.isExpired) {
+            await submitAttempt(attemptId, "Time Expired");
+            return res.status(200).json({
+                message: 'Exam duration has expired. Attempt has been automatically submitted.',
+                isTimeExpired: true,
+                status: "Time Expired"
+            });
         }
 
         // Build bulkWrite operations for atomic batch upsert
@@ -291,33 +322,9 @@ const getResults = async (req, res) => {
 
         const targetTestId = attempt.testId || attempt.exam_id || attemptId;
 
-        // 1. Fetch questions for this test
-        const qOrList = [];
-        if (mongoose.Types.ObjectId.isValid(targetTestId)) {
-            const testObjId = new mongoose.Types.ObjectId(targetTestId);
-            qOrList.push({ testId: testObjId }, { exam_id: testObjId });
-        }
-        qOrList.push({ testId: targetTestId }, { exam_id: targetTestId }, { testId: targetTestId.toString() }, { exam_id: targetTestId.toString() });
-
-        let questions = await questionModel.find({ $or: qOrList });
-
-        if (questions.length === 0) {
-            const Section = require("../model/sectionModel/section.model");
-            const SectionQuestion = require("../model/sectionModel/sectionQuestion.model");
-            const sectionOrList = [];
-            if (mongoose.Types.ObjectId.isValid(targetTestId)) {
-                sectionOrList.push({ testId: new mongoose.Types.ObjectId(targetTestId) });
-            }
-            sectionOrList.push({ testId: targetTestId }, { testId: targetTestId.toString() });
-
-            const sections = await Section.find({ $or: sectionOrList });
-            const sectionIds = sections.map(s => s._id);
-            const secQuestions = await SectionQuestion.find({ sectionId: { $in: sectionIds } });
-            if (secQuestions.length > 0) {
-                const questionIds = secQuestions.map(sq => sq.questionId).filter(Boolean);
-                questions = await questionModel.find({ _id: { $in: questionIds } });
-            }
-        }
+        // 1. Fetch questions for this test using unified question resolver (with answer key for grading)
+        const { getTestQuestions } = require("../utils/questionservice");
+        let questions = await getTestQuestions(targetTestId, { includeAnswerKey: true });
 
         // 2. Fetch all student answers for this attempt
         const answers = await studentAnswerSchema.find({

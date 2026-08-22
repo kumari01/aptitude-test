@@ -10,12 +10,14 @@ const {
 
 const createExam = async (req, res) => {
     try {
-        const { title, testType, duration_minutes, total_marks, totalMarks, maxAttempts } = req.body;
+        const { title, testType, duration_minutes, durationMinutes, total_marks, totalMarks, maxAttempts } = req.body;
+        const duration = Number(durationMinutes || duration_minutes) || 30;
 
         const test = new Test({
             title,
             testType: testType || "Aptitude",
             status: "Published",
+            durationMinutes: duration,
             totalMarks: totalMarks || total_marks || 0,
             maxAttempts: maxAttempts || 1,
             createdBy: req.user?.id
@@ -110,12 +112,13 @@ const startExam = async (req, res) => {
                 });
             }
 
-            // 3. Concurrency guard: Check if an attempt was created in the last 5 seconds to prevent race duplicates
+            // 3. Concurrency guard: Check if an active attempt was created in the last 5 seconds to prevent race duplicates
             const recentlyCreated = await ExamAttempt.findOne({
                 $and: [
                     { $or: studentOrList },
                     { $or: examOrList }
                 ],
+                status: { $in: ["Started", "In Progress"] },
                 createdAt: { $gte: new Date(Date.now() - 5000) }
             }).sort({ createdAt: -1 });
 
@@ -145,11 +148,9 @@ const startExam = async (req, res) => {
             await proctoringSession.save();
         }
 
-        // Fetch questions without exposing correct_option_id
-        const questions = await questionModel.find(
-            { $or: [{ testId: examId }, { exam_id: examId }] },
-            { correct_option_id: 0, __v: 0 }
-        );
+        // Fetch questions without exposing correct_option_id using unified question resolver
+        const { getTestQuestions } = require("../utils/questionservice");
+        const questions = await getTestQuestions(examId, { includeAnswerKey: false });
 
         res.status(200).json({
             message: 'Exam started successfully',

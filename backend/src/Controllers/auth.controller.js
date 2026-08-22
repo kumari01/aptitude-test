@@ -277,8 +277,8 @@ const getStudentProgress = async (req, res) => {
       let totalMarks = testObj?.totalMarks || 0;
       if (!totalMarks || totalMarks <= 0) {
         if (targetTestId) {
-          const Question = require("../model/question.model");
-          const qList = await Question.find({ $or: [{ testId: targetTestId }, { exam_id: targetTestId }] });
+          const { getTestQuestions } = require("../utils/questionservice");
+          const qList = await getTestQuestions(targetTestId, { includeAnswerKey: true });
           if (qList.length > 0) {
             totalMarks = qList.reduce((sum, q) => sum + (q.marks || 1), 0);
             try {
