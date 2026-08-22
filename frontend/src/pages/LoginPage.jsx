@@ -5,7 +5,7 @@ import Logo from "../components/common/Logo";
 import GoogleG from "../components/common/GoogleG";
 import { BRAND, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
 import { useToast } from "../context/ToastContext";
-import axios from "axios";
+import api from "../api/axios";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -52,11 +52,7 @@ export function LoginPage() {
             ? { username, rollno: roll, email, password }
             : { username, email, adminid: adminId, password };
 
-        const response = await axios.post(
-          `http://localhost:3000/api${endpoint}`,
-          payload,
-          { withCredentials: true }
-        );
+        const response = await api.post(endpoint, payload);
 
         console.log("Signup successful:", response.data);
         toast.success(response.data.message || "Account created successfully! Switching to sign in...");
@@ -86,11 +82,7 @@ export function LoginPage() {
             ? { email: roll, password }
             : { adminid: roll, password };
 
-        const response = await axios.post(
-          `http://localhost:3000/api${endpoint}`,
-          payload,
-          { withCredentials: true }
-        );
+        const response = await api.post(endpoint, payload);
 
         console.log("Login successful:", response.data);
         toast.success("Logged in successfully!");

@@ -93,6 +93,8 @@ export function ExamTakingPage() {
   const triggerDisqualification = async (reason) => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (modalTimerRef.current) clearInterval(modalTimerRef.current);
+    if (debounceSaveTimeoutRef.current) clearTimeout(debounceSaveTimeoutRef.current);
+    uncommittedAnswersRef.current.clear();
     setSubmitting(true);
     setWarningModal(null);
     isWarningActiveRef.current = false;
@@ -190,7 +192,7 @@ export function ExamTakingPage() {
       const currSessionId = proctoringSessionIdRef.current;
       const token = localStorage.getItem("token") || "";
 
-      const baseUrl = api.defaults.baseURL || "http://localhost:5000/api";
+      const baseUrl = api.defaults.baseURL || "http://localhost:3000/api";
       const submitUrl = `${baseUrl}/answers/submit`;
 
       const payload = JSON.stringify({
