@@ -25,9 +25,36 @@ app.use(
 
 // 2. Cookie Parser & CORS
 app.use(cookieParser());
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://localhost:3005",
+];
+
+if (process.env.CLIENT_URL) {
+  process.env.CLIENT_URL.split(",").forEach((url) => {
+    const trimmed = url.trim();
+    if (trimmed) allowedOrigins.push(trimmed);
+  });
+}
+
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173"],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        origin.endsWith(".web.app") ||
+        origin.endsWith(".firebaseapp.com");
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked request from origin: ${origin}`));
+    },
     credentials: true,
   })
 );
