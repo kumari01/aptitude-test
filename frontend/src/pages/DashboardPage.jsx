@@ -16,13 +16,15 @@ import {
 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 import AdminDashboardPage from "./AdminDashboardPage";
 import { BaseSkeleton, DashboardSkeleton } from "../components/skeletons";
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const [student, setStudent] = useState(null);
+  const { user, isAdmin } = useAuth();
+  const [student, setStudent] = useState(user);
   const [progress, setProgress] = useState(null);
   const [liveExam, setLiveExam] = useState(null);
   const [totalAssignedCount, setTotalAssignedCount] = useState(0);
@@ -36,7 +38,6 @@ export function DashboardPage() {
   const [dropdownSearch, setDropdownSearch] = useState("");
   const dropdownRef = useRef(null);
 
-  const isAdmin = !!localStorage.getItem("admin");
 
   useEffect(() => {
     if (isAdmin) return;
@@ -151,12 +152,8 @@ export function DashboardPage() {
           .catch(() => null);
       } catch (error) {
         console.error("Dashboard fetch error:", error);
-
-        const localStudent = localStorage.getItem("student");
-        if (localStudent) {
-          setStudent(JSON.parse(localStudent));
-        } else if (error.response?.status === 401) {
-          navigate("/login");
+        if (user) {
+          setStudent(user);
         }
       } finally {
         setPageLoading(false);

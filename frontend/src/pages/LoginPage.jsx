@@ -5,11 +5,13 @@ import Logo from "../components/common/Logo";
 import GoogleG from "../components/common/GoogleG";
 import { BRAND, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { login: authLogin } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [tab, setTab] = useState("Student");
   const [username, setUsername] = useState("");
@@ -27,21 +29,35 @@ export function LoginPage() {
     setPassword("");
   };
 
+  const handleTabSwitch = (newTab) => {
+    setTab(newTab);
+    setIsSignUp(false);
+    resetForm();
+  };
+
   const handleToggleMode = (signUpState) => {
     setIsSignUp(signUpState);
     resetForm();
   };
 
-  const handleSubmit = async () => {
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
     if (isSignUp) {
-      // Validation for Sign Up
-      if (!username || !password || (tab === "Student" ? (!roll || !email) : (!adminId || !email))) {
-        toast.warning(`Please fill in all form fields for ${tab} registration`);
+      // Sign Up Logic
+      if (!username || !email || !password) {
+        toast.warning("Please fill in all required fields");
         return;
       }
 
-      if (!email.toLowerCase().endsWith("@sasi.ac.in")) {
-        toast.warning("Only @sasi.ac.in email addresses are allowed!");
+      if (tab === "Student" && !roll) {
+        toast.warning("Please enter your roll number");
+        return;
+      }
+
+      if (tab === "Admin" && !adminId) {
+        toast.warning("Please enter your Admin ID");
         return;
       }
 
@@ -49,22 +65,22 @@ export function LoginPage() {
         const endpoint = tab === "Student" ? "/auth/student/signup" : "/auth/admin/signup";
         const payload =
           tab === "Student"
-            ? { username, rollno: roll, email, password }
+            ? { username, email, rollno: roll, password }
             : { username, email, adminid: adminId, password };
 
         const response = await api.post(endpoint, payload);
 
         console.log("Signup successful:", response.data);
-        toast.success(response.data.message || "Account created successfully! Switching to sign in...");
-
-        // Switch to sign in mode after successful signup
-        setTimeout(() => {
-          setIsSignUp(false);
-          setPassword("");
-        }, 1500);
+        toast.success("Account created successfully! Please sign in.");
+        setIsSignUp(false);
+        setPassword("");
       } catch (error) {
         console.error("Signup error:", error);
-        toast.error(error.response?.data?.message || "Registration failed. Please check your inputs.");
+        if (error.response) {
+          toast.error(error.response.data.message || "Signup failed");
+        } else {
+          toast.error("Unable to connect to server. Please check if the server is running.");
+        }
       }
     } else {
       // Sign In Logic
@@ -87,18 +103,14 @@ export function LoginPage() {
         console.log("Login successful:", response.data);
         toast.success("Logged in successfully!");
 
-        if (response.data.token) {
-          localStorage.setItem("token", response.data.token);
+        const token = response.data.token;
+        if (response.data.admin) {
+          authLogin(token, response.data.admin, "admin");
+          navigate("/admin", { replace: true });
+        } else {
+          authLogin(token, response.data.student, "student");
+          navigate("/dashboard", { replace: true });
         }
-        if (response.data.student) {
-          localStorage.setItem("student", JSON.stringify(response.data.student));
-        } else if (response.data.admin) {
-          localStorage.setItem("admin", JSON.stringify(response.data.admin));
-        }
-
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 500);
       } catch (error) {
         console.error("Login error:", error);
         if (error.response) {

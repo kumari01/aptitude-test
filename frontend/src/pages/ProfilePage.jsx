@@ -2,10 +2,12 @@ import React, { useEffect, useState } from "react";
 import { Trophy, FileText } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import { BRAND, FONT_DISPLAY } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 
 export function ProfilePage() {
-  const [student, setStudent] = useState(null);
+  const { user } = useAuth();
+  const [student, setStudent] = useState(user);
   const [progress, setProgress] = useState(null);
 
   useEffect(() => {
@@ -24,19 +26,12 @@ export function ProfilePage() {
         }
       } catch (error) {
         console.error("Profile error:", error);
-        const localStudent = localStorage.getItem("student");
-        if (localStudent) {
-          try {
-            setStudent(JSON.parse(localStudent));
-          } catch (e) {
-            console.error("Failed to parse stored student data", e);
-          }
-        }
       }
     };
 
     fetchProfile();
   }, []);
+
 
   const displayName = student?.username || student?.name || "Student";
   const displayRoll = student?.rollno || student?.roll || "N/A";

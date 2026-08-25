@@ -18,6 +18,7 @@ import {
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import StatCard from "../components/common/StatCard";
 import AdminWorkflowVisualizer from "../components/admin/AdminWorkflowVisualizer";
 import CreateTestWizardModal from "../components/admin/CreateTestWizardModal";
@@ -42,7 +43,7 @@ const formatForDateTimeLocal = (dateInput) => {
 export function ExamsPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const isAdmin = !!localStorage.getItem("admin");
+  const { isAdmin } = useAuth();
 
   // Click outside ref for 3-dots popover so full-screen backdrop doesn't block scroll
   const activeMenuRef = useRef(null);
