@@ -5,13 +5,14 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require("cookie-parser");
 
-const ExamRouter = require('./routes/Exam.router');
-const AuthRouter = require('./routes/auth.router');
-const AnswerRouter = require('./routes/answer.router');
-const TestManagementRouter = require('./routes/testManagement.router');
-const ProctoringEventRoute = require('./routes/proctoringEvent.route');
-const proctoringSessionRoutes = require("./routes/proctoringSession.route");
-const LeaderboardRouter = require('./routes/leaderboard.router');
+const examRouter = require('./routes/exam.router');
+const authRouter = require('./routes/auth.router');
+const answerRouter = require('./routes/answer.router');
+const testManagementRouter = require('./routes/testManagement.router');
+const proctoringEventRouter = require('./routes/proctoringEvent.router');
+const proctoringSessionRouter = require("./routes/proctoringSession.router");
+const leaderboardRouter = require('./routes/leaderboard.router');
+const { connectDB } = require('./database/connectdb');
 
 const app = express();
 
@@ -88,7 +89,26 @@ app.use("/api/", generalApiLimiter);
 app.use("/api/auth/student/login", authLimiter);
 app.use("/api/auth/admin/login", authLimiter);
 
-// 5. Root & Health Check
+// 5. Database Connection Readiness Middleware (ensures connection before handling requests)
+app.use(async (req, res, next) => {
+  if (req.path === "/" || req.path === "/health") {
+    return next();
+  }
+
+  if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+    try {
+      await connectDB();
+    } catch (err) {
+      return res.status(503).json({
+        success: false,
+        message: "Database service temporarily unavailable",
+      });
+    }
+  }
+  next();
+});
+
+// 6. Root & Health Check
 app.get('/', (req, res) => {
   res.status(200).json({
     name: "Quiz App API",
@@ -105,14 +125,15 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 6. API Route Handlers
-app.use('/api/auth', AuthRouter);
-app.use('/api/exams', ExamRouter);
-app.use('/api/answers', AnswerRouter);
-app.use('/api/test-management', TestManagementRouter);
-app.use("/api/v1/proctoring", proctoringSessionRoutes);
-app.use("/api/v1/proctoring", ProctoringEventRoute);
-app.use('/api/leaderboard', LeaderboardRouter);
+// 7. API Route Handlers
+app.use('/api/auth', authRouter);
+app.use('/api/exams', examRouter);
+app.use('/api/answers', answerRouter);
+app.use('/api/test-management', testManagementRouter);
+app.use("/api/v1/proctoring", proctoringSessionRouter);
+app.use("/api/v1/proctoring", proctoringEventRouter);
+app.use('/api/leaderboard', leaderboardRouter);
+
 
 // 7. 404 Route Not Found Handler
 app.use((req, res, next) => {
