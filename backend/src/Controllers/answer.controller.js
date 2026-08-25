@@ -236,20 +236,8 @@ const submitExam = async (req, res) => {
             submissionType || "Submitted"
         );
 
-        // Update leaderboard asynchronously without blocking response
-        const targetExamId = result.attempt.exam_id || result.attempt.testId;
-        if (targetExamId) {
-            setImmediate(() => {
-                generateLeaderboard(targetExamId).catch(err => {
-                    console.warn("Background leaderboard update error:", err.message);
-                });
-            });
-        }
-
         return res.status(200).json({
             message: "Exam submitted successfully",
-            score: result.score,
-            totalMarks: result.totalMarks,
             attempt: result.attempt
         });
     } catch (err) {
@@ -339,6 +327,8 @@ const getResults = async (req, res) => {
         let correctCount = 0;
         let answeredCount = 0;
 
+        let calculatedScore = 0;
+
         const breakdown = questions.map((question, idx) => {
             const ans = answers.find(a => a.question_id.toString() === question._id.toString());
             const selectedOptionId = ans?.selected_option_id ? ans.selected_option_id.toString() : null;
@@ -348,7 +338,10 @@ const getResults = async (req, res) => {
             if (isAnswered) answeredCount++;
 
             const isCorrect = isAnswered && correctOptionId && selectedOptionId === correctOptionId;
-            if (isCorrect) correctCount++;
+            if (isCorrect) {
+                correctCount++;
+                calculatedScore += (question.marks || 1);
+            }
 
             const optionsFormatted = (question.options || []).map(opt => {
                 const optId = opt._id ? opt._id.toString() : opt.text;
@@ -376,12 +369,15 @@ const getResults = async (req, res) => {
         const totalQuestions = questions.length;
         const totalMarks = questions.reduce((sum, q) => sum + (q.marks || 1), 0) || totalQuestions;
         const wrongCount = Math.max(0, answeredCount - correctCount);
-        const percentage = totalMarks > 0 ? Math.round((attempt.score / totalMarks) * 100) : 0;
+        
+        // Use calculatedScore if backend background grading hasn't set the final attempt score yet
+        const displayScore = (attempt.isGraded || attempt.score > 0) ? attempt.score : calculatedScore;
+        const percentage = totalMarks > 0 ? Math.round((displayScore / totalMarks) * 100) : 0;
 
         res.status(200).json({
             attemptId: attempt._id,
             status: attempt.status,
-            score: attempt.score,
+            score: displayScore,
             totalMarks,
             totalQuestions,
             answeredCount,

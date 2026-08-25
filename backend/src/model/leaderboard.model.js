@@ -25,6 +25,11 @@ const leaderboardSchema = new mongoose.Schema(
             required: true
         },
 
+        studentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Student"
+        },
+
         score: {
             type: Number,
             required: true,
@@ -34,6 +39,16 @@ const leaderboardSchema = new mongoose.Schema(
         percentage: {
             type: Number,
             required: true,
+            default: 0
+        },
+
+        accuracy: {
+            type: Number,
+            default: 0
+        },
+
+        timeTaken: {
+            type: Number,
             default: 0
         },
 
@@ -60,7 +75,8 @@ leaderboardSchema.index({
 
 const Leaderboard = mongoose.model(
     "LeaderboardEntry",
-    leaderboardSchema
+    leaderboardSchema,
+    "leaderboardEntries"
 );
 
 module.exports = Leaderboard;
