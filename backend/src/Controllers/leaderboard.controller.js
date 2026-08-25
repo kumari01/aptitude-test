@@ -94,13 +94,22 @@ const generateLeaderboard = async (examId) => {
                 Math.min(100, Math.max(0, (rawScore / totalMarks) * 100)).toFixed(2)
             );
 
+            const timeTaken = attempt.submitted_at && attempt.started_at
+                ? Math.round((new Date(attempt.submitted_at) - new Date(attempt.started_at)) / 1000)
+                : (attempt.updatedAt && attempt.started_at
+                    ? Math.round((new Date(attempt.updatedAt) - new Date(attempt.started_at)) / 1000)
+                    : 0);
+
             const docData = {
                 exam_id: examObjId,
                 testId: examObjId,
                 attempt_id: attempt._id,
                 student_id: attempt.student_id,
+                studentId: attempt.student_id,
                 score: rawScore,
                 percentage: percentage,
+                accuracy: percentage,
+                timeTaken: timeTaken,
                 rank: currentRank
             };
 

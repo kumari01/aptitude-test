@@ -73,6 +73,11 @@ const testAttemptSchema = new mongoose.Schema(
       ],
       default: "Started",
     },
+
+    isGraded: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
