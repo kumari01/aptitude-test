@@ -43,9 +43,7 @@ async function connectDB() {
 }
 
 mongoose.connection.on('disconnected', () => {
-    console.warn('MongoDB connection lost. Reconnecting...');
     connectionPromise = null;
-    connectDB().catch(() => {});
 });
 
 module.exports = { connectDB };

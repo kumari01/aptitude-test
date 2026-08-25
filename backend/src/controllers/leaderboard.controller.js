@@ -9,8 +9,11 @@ const Exam = require("../model/testModel/test.model");
 const generateLeaderboard = async (examId) => {
     try {
         const mongoose = require("mongoose");
-        const examObjId = mongoose.Types.ObjectId.isValid(examId) ? new mongoose.Types.ObjectId(examId) : examId;
-        const exam = await Exam.findById(examId);
+        if (!examId || examId === "undefined" || !mongoose.Types.ObjectId.isValid(examId)) {
+            return [];
+        }
+        const examObjId = new mongoose.Types.ObjectId(examId);
+        const exam = await Exam.findById(examObjId);
 
         if (!exam) {
             return [];
@@ -154,17 +157,20 @@ const getLeaderboard = async (req, res) => {
         const mongoose = require("mongoose");
 
         // If no examId provided or target exam has no submissions, find the latest exam with submissions
-        if (!examId || examId === "latest") {
+        if (!examId || examId === "latest" || examId === "undefined") {
             const latestAttempt = await ExamAttempt.findOne({
                 status: { $in: ["Submitted", "Completed", "Auto Submitted"] }
             }).sort({ submitted_at: -1, updatedAt: -1 });
 
             if (latestAttempt) {
                 examId = (latestAttempt.testId || latestAttempt.exam_id)?.toString();
+            } else {
+                const latestExam = await Exam.findOne().sort({ createdAt: -1 });
+                if (latestExam) examId = latestExam._id.toString();
             }
         }
 
-        if (!examId) {
+        if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
             return res.status(200).json({
                 examId: null,
                 testTitle: "No Exams",
@@ -173,8 +179,8 @@ const getLeaderboard = async (req, res) => {
             });
         }
 
-        const examObjId = mongoose.Types.ObjectId.isValid(examId) ? new mongoose.Types.ObjectId(examId) : examId;
-        const examDoc = await Exam.findById(examId);
+        const examObjId = new mongoose.Types.ObjectId(examId);
+        const examDoc = await Exam.findById(examObjId);
 
         // Generate/update leaderboard for the requested exam
         let generated = await generateLeaderboard(examId);
@@ -191,9 +197,9 @@ const getLeaderboard = async (req, res) => {
 
             if (latestAttempt) {
                 const fallbackId = (latestAttempt.testId || latestAttempt.exam_id)?.toString();
-                if (fallbackId && fallbackId !== examId.toString()) {
+                if (fallbackId && fallbackId !== examId.toString() && mongoose.Types.ObjectId.isValid(fallbackId)) {
                     activeExamId = fallbackId;
-                    activeExamDoc = await Exam.findById(fallbackId);
+                    activeExamDoc = await Exam.findById(new mongoose.Types.ObjectId(fallbackId));
                     await generateLeaderboard(fallbackId);
                     isFallback = true;
                 }
@@ -255,6 +261,14 @@ const getLeaderboard = async (req, res) => {
 const getStudentRank = async (req, res) => {
     try {
         const { examId, studentId } = req.params;
+        const mongoose = require("mongoose");
+
+        if (!examId || !studentId || examId === "undefined" || studentId === "undefined" ||
+            !mongoose.Types.ObjectId.isValid(examId) || !mongoose.Types.ObjectId.isValid(studentId)) {
+            return res.status(400).json({
+                message: "Valid examId and studentId are required"
+            });
+        }
 
         await generateLeaderboard(examId);
 
