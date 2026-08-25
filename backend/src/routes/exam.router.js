@@ -2,10 +2,10 @@ const express = require("express");
 
 const router = express.Router();
 
-const examController = require("../Controllers/Exam.controller");
-const questionController = require("../Controllers/question.controller");
-const authenticate = require("../Middleware/auth.middleware");
-const requireAdmin = require("../Middleware/admin.middleware");
+const examController = require("../controllers/exam.controller");
+const questionController = require("../controllers/question.controller");
+const authenticate = require("../middleware/auth.middleware");
+const requireAdmin = require("../middleware/admin.middleware");
 
 router.get('/hello', (req, res) => {
     res.send('Hello from StartExamRouter');

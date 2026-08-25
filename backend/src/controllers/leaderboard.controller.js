@@ -64,7 +64,7 @@ const generateLeaderboard = async (examId) => {
 
         let totalMarks = exam.totalMarks || 0;
         if (!totalMarks || totalMarks <= 0) {
-            const { getTestQuestions } = require("../utils/questionservice");
+            const { getTestQuestions } = require("../utils/questionService");
             const qList = await getTestQuestions(examId, { includeAnswerKey: true });
             if (qList.length > 0) {
                 totalMarks = qList.reduce((sum, q) => sum + (q.marks || 1), 0);

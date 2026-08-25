@@ -149,7 +149,7 @@ const startExam = async (req, res) => {
         }
 
         // Fetch questions without exposing correct_option_id using unified question resolver
-        const { getTestQuestions } = require("../utils/questionservice");
+        const { getTestQuestions } = require("../utils/questionService");
         const questions = await getTestQuestions(examId, { includeAnswerKey: false });
 
         res.status(200).json({

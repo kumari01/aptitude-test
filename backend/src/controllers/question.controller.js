@@ -46,7 +46,7 @@ const getQuestions = async(req,res)=>{
     try{
         //retrieve all questions for a specific exam using unified questionservice
         const examId = req.params.examId || req.query?.exam_id || req.body?.exam_id;
-        const { getTestQuestions } = require("../utils/questionservice");
+        const { getTestQuestions } = require("../utils/questionService");
         const questions = await getTestQuestions(examId, { includeAnswerKey: false });
         res.status(200).json({ questions });
     }

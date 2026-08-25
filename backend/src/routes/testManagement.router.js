@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const controller = require("../Controllers/testManagement.controller");
-const authenticate = require("../Middleware/auth.middleware");
-const requireAdmin = require("../Middleware/admin.middleware");
+const controller = require("../controllers/testManagement.controller");
+const authenticate = require("../middleware/auth.middleware");
+const requireAdmin = require("../middleware/admin.middleware");
 
 // Create a new test with default settings and targeting
 router.post("/create", authenticate, requireAdmin, controller.createTest);

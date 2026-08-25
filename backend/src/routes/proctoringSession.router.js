@@ -7,9 +7,9 @@ const {
   getLiveSessionsForTest,
   terminateSessionByAdmin,
   disqualifySession,
-} = require("../Controllers/proctoringSession.controller");
-const authenticate = require("../Middleware/auth.middleware");
-const requireAdmin = require("../Middleware/admin.middleware");
+} = require("../controllers/proctoringSession.controller");
+const authenticate = require("../middleware/auth.middleware");
+const requireAdmin = require("../middleware/admin.middleware");
 
 const router = express.Router();
 

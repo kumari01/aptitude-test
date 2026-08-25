@@ -57,7 +57,7 @@ const saveStudentAnswer = async (req, res) => {
         }
 
         // Check if question exists using unified single question resolver
-        const { getSingleQuestion } = require("../utils/questionservice");
+        const { getSingleQuestion } = require("../utils/questionService");
         const question = await getSingleQuestion(questionId, { includeAnswerKey: true });
         if (!question) {
             return res.status(404).json({
@@ -311,7 +311,7 @@ const getResults = async (req, res) => {
         const targetTestId = attempt.testId || attempt.exam_id || attemptId;
 
         // 1. Fetch questions for this test using unified question resolver (with answer key for grading)
-        const { getTestQuestions } = require("../utils/questionservice");
+        const { getTestQuestions } = require("../utils/questionService");
         let questions = await getTestQuestions(targetTestId, { includeAnswerKey: true });
 
         // 2. Fetch all student answers for this attempt

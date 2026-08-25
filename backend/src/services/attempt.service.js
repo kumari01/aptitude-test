@@ -16,7 +16,7 @@ const gradeAttemptInBackground = async (attemptId, submissionType) => {
         const targetTestId = attempt.testId || attempt.exam_id;
 
         // Get all questions belonging to this test using unified question resolver (with answer key)
-        const { getTestQuestions } = require("../utils/questionservice");
+        const { getTestQuestions } = require("../utils/questionService");
         let questions = await getTestQuestions(targetTestId, { includeAnswerKey: true });
         console.log(`[Background Grading] Resolved questions count: ${questions.length}`);
 
@@ -92,7 +92,7 @@ const gradeAttemptInBackground = async (attemptId, submissionType) => {
         console.log(`[Background Grading] Attempt updated and saved. Score: ${finalScore}, isGraded: true`);
 
         // Update leaderboard
-        const { generateLeaderboard } = require("../Controllers/leaderboard.controller");
+        const { generateLeaderboard } = require("../controllers/leaderboard.controller");
         const targetExamId = attempt.exam_id || attempt.testId;
         if (targetExamId) {
             console.log(`[Background Grading] Updating leaderboard for exam: ${targetExamId}`);

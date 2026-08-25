@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const answerController = require("../Controllers/answer.controller");
-const authenticate = require("../Middleware/auth.middleware");
+const answerController = require("../controllers/answer.controller");
+const authenticate = require("../middleware/auth.middleware");
 
 // Save or update student answer for a question (single)
 router.post("/save", authenticate, answerController.saveStudentAnswer);

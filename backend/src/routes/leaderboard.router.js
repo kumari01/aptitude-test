@@ -4,7 +4,7 @@ const {
     getLeaderboard,
     getStudentRank,
     getLeaderboardExams
-} = require("../Controllers/leaderboard.controller");
+} = require("../controllers/leaderboard.controller");
 
 const router = express.Router();
 
