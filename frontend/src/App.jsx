@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "./components/layout/MainLayout";
+import { ProtectedRoute, AdminRoute, PublicOnlyRoute } from "./components/common/RouteGuards";
 
 // Route-level code splitting via dynamic imports for blazing-fast initial bundle loading
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -24,24 +25,42 @@ export default function App() {
   return (
     <Suspense fallback={<RouteSuspenseFallback />}>
       <Routes>
-        {/* Auth route */}
-        <Route path="/login" element={<LoginPage />} />
-        {/* Main app layout routes */}
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/admin" element={<AdminDashboardPage />} />
-          <Route path="/exams" element={<ExamsPage />} />
-          <Route path="/exams/:examId" element={<ExamDetailPage />} />
-          <Route path="/results" element={<ResultsPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
+        {/* Public auth route (redirects to dashboard if already logged in) */}
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <LoginPage />
+            </PublicOnlyRoute>
+          }
+        />
+
+        {/* Protected routes */}
+        <Route element={<ProtectedRoute />}>
+          {/* Main app layout routes */}
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/exams" element={<ExamsPage />} />
+            <Route path="/exams/:examId" element={<ExamDetailPage />} />
+            <Route path="/results" element={<ResultsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+
+            {/* Admin-exclusive route */}
+            <Route element={<AdminRoute />}>
+              <Route path="/admin" element={<AdminDashboardPage />} />
+            </Route>
+          </Route>
+
+          {/* Full-screen exam flow routes */}
+          <Route path="/exams/:examId/take" element={<ExamTakingPage />} />
+          <Route path="/exams/:examId/result" element={<ExamResultPage />} />
         </Route>
-        {/* Full-screen exam flow routes */}
-        <Route path="/exams/:examId/take" element={<ExamTakingPage />} />
-        <Route path="/exams/:examId/result" element={<ExamResultPage />} />
-        {/* Fallback */}
+
+        {/* Catch-all fallback */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Suspense>
   );
 }
+
