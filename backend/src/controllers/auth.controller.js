@@ -1,15 +1,27 @@
 const { Student: studentModel, Admin: adminModel } = require('../model/user.model');
 const ExamAttempt = require('../model/testModel/testAttempt.model');
+const { issueAuthToken } = require('../utils/authToken');
 
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+
+const isEmailDomainAllowed = (email) => {
+    if (!email || typeof email !== 'string' || !email.includes('@')) return false;
+    const allowed = (process.env.ALLOWED_EMAIL_DOMAINS || "sasi.ac.in")
+        .split(",")
+        .map(d => d.trim().toLowerCase().replace(/^@/, ""));
+    if (allowed.includes("*")) return true;
+    const domain = email.toLowerCase().split("@")[1];
+    return allowed.includes(domain);
+};
 
 const RegisterStudent = async(req,res) =>{
     try{
         const {username,rollno,email,password,department,batch,section,phone} = req.body;
 
-        if (!email || !email.toLowerCase().endsWith("@sasi.ac.in")) {
-            return res.status(400).json({ message: 'Only @sasi.ac.in email addresses are allowed' });
+        if (!isEmailDomainAllowed(email)) {
+            return res.status(400).json({ 
+                message: `Email domain not allowed. Allowed domains: ${process.env.ALLOWED_EMAIL_DOMAINS || "@sasi.ac.in"}` 
+            });
         }
 
         const existingStudent = await studentModel.findOne({
@@ -74,22 +86,7 @@ const studentlogin = async(req,res) =>{
         if(!isPasswordValid){
             return res.status(401).json({message: 'Invalid password'});
         }
-        const token = jwt.sign(
-            {
-                id: student._id,
-                role: "student"
-            },
-            process.env.JWT_SECRET || process.env.JWT || "default_jwt_secret",
-            {
-                expiresIn: "1h"
-            }
-        );
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 60 * 60 * 1000
-        });
+        const token = issueAuthToken(res, student._id, "student");
 
         const studentData = student.toObject();
         delete studentData.password;
@@ -108,8 +105,10 @@ const adminregister = async(req,res) =>{
     try{
         const {username,email,adminid,password,phone} = req.body;
 
-        if (!email || !email.toLowerCase().endsWith("@sasi.ac.in")) {
-            return res.status(400).json({ message: 'Only @sasi.ac.in email addresses are allowed' });
+        if (!isEmailDomainAllowed(email)) {
+            return res.status(400).json({ 
+                message: `Email domain not allowed. Allowed domains: ${process.env.ALLOWED_EMAIL_DOMAINS || "@sasi.ac.in"}` 
+            });
         }
 
         const isadmin = await adminModel.findOne({$or: [{email}, {adminid}]});
@@ -167,22 +166,7 @@ const adminlogin = async(req,res) =>{
         admin.lastLoginAt = new Date();
         await admin.save();
 
-        const token = jwt.sign(
-            {
-                id: admin._id,
-                role: "admin"
-            },
-            process.env.JWT_SECRET || process.env.JWT || "default_jwt_secret",
-            {
-                expiresIn: "1h"
-            }
-        );
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 60 * 60 * 1000
-        });
+        const token = issueAuthToken(res, admin._id, "admin");
 
         const adminData = admin.toObject();
         delete adminData.password;
@@ -277,7 +261,7 @@ const getStudentProgress = async (req, res) => {
       let totalMarks = testObj?.totalMarks || 0;
       if (!totalMarks || totalMarks <= 0) {
         if (targetTestId) {
-          const { getTestQuestions } = require("../utils/questionservice");
+          const { getTestQuestions } = require("../utils/questionService");
           const qList = await getTestQuestions(targetTestId, { includeAnswerKey: true });
           if (qList.length > 0) {
             totalMarks = qList.reduce((sum, q) => sum + (q.marks || 1), 0);

@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+const validateEmailDomain = (email) => {
+    if (!email || !email.includes('@')) return false;
+    const allowed = (process.env.ALLOWED_EMAIL_DOMAINS || "sasi.ac.in")
+        .split(",")
+        .map(d => d.trim().toLowerCase().replace(/^@/, ""));
+    if (allowed.includes("*")) return true;
+    const domain = email.toLowerCase().split("@")[1];
+    return allowed.includes(domain);
+};
+
 const studentSchema = new mongoose.Schema({
     username:{
         type: String,
@@ -9,7 +19,10 @@ const studentSchema = new mongoose.Schema({
         type: String,
         required: true,
         unique: true,
-        match: [/@sasi\.ac\.in$/, "Only @sasi.ac.in emails are allowed"]
+        validate: {
+            validator: validateEmailDomain,
+            message: () => `Email domain is not allowed. Supported domain: ${process.env.ALLOWED_EMAIL_DOMAINS || "@sasi.ac.in"}`
+        }
     },
     rollno:{
         type: String,
@@ -52,7 +65,10 @@ const adminSchema = new mongoose.Schema({
         type: String,
         required: true,
         unique: true,
-        match: [/@sasi\.ac\.in$/, "Only @sasi.ac.in emails are allowed"]
+        validate: {
+            validator: validateEmailDomain,
+            message: () => `Email domain is not allowed. Supported domain: ${process.env.ALLOWED_EMAIL_DOMAINS || "@sasi.ac.in"}`
+        }
     },
     adminid:{
         type: String,
