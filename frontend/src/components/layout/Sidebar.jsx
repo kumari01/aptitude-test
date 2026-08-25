@@ -15,9 +15,11 @@ import {
 } from "lucide-react";
 import Logo from "../common/Logo";
 import { INK, BRAND, FONT_DISPLAY } from "../../constants/theme";
+import { useAuth } from "../../context/AuthContext";
 
 export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onToggleCollapsed }) {
-  const isAdmin = !!localStorage.getItem("admin");
+  const { isAdmin } = useAuth();
+
 
   const navItems = isAdmin
     ? [

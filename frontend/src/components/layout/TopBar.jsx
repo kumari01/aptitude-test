@@ -2,16 +2,17 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Menu } from "lucide-react";
 import { BRAND, BRAND_DARK } from "../../constants/theme";
+import { useAuth } from "../../context/AuthContext";
 
 export function TopBar({ onMenuClick }) {
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("student");
-    localStorage.removeItem("admin");
+    logout();
     navigate("/login");
   };
+
 
   return (
     <div className="flex items-center justify-between gap-4 px-4 sm:px-6 md:px-10 py-5 border-b border-gray-100 bg-white">
