@@ -11,7 +11,7 @@ const isEmailDomainAllowed = (email) => {
         .map(d => d.trim().toLowerCase().replace(/^@/, ""));
     if (allowed.includes("*")) return true;
     const domain = email.toLowerCase().split("@")[1];
-    return allowed.includes(domain);
+    return allowed.includes(domain); 
 };
 
 const RegisterStudent = async(req,res) =>{
