@@ -117,11 +117,21 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+      await connectDB();
+    }
+    if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+      await mongoose.connection.db.admin().ping();
+    }
+  } catch (e) {}
+
   res.status(200).json({
     status: "healthy",
     database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
   });
 });
 
