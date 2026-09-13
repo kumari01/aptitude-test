@@ -64,6 +64,17 @@ node_modules/
 
 # dotenv environment variables file
 .env
+.env.*
 
 # dataconnect generated files
 .dataconnect
+
+# Tests and Test Folders
+test/
+tests/
+backend/test/
+backend/tests/
+*test_*.js
+*_test.js
+*.test.js
+backend/scratch_clean_db.js

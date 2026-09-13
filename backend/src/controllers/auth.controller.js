@@ -347,4 +347,30 @@ const getStudentProgress = async (req, res) => {
   }
 };
 
-module.exports = { RegisterStudent, studentlogin, adminregister, adminlogin, getStudentProfile, getStudentProgress };
+const refreshToken = async (req, res) => {
+  try {
+    const { verifyAndRefreshToken } = require("../utils/authToken");
+    const authHeader = req.headers.authorization;
+    const token = (authHeader && authHeader.startsWith("Bearer "))
+      ? authHeader.split(" ")[1]
+      : req.cookies?.token;
+
+    if (!token) {
+      return res.status(401).json({ message: "No token provided to refresh" });
+    }
+
+    const newToken = verifyAndRefreshToken(token, res);
+    if (!newToken) {
+      return res.status(401).json({ message: "Token expired or invalid" });
+    }
+
+    return res.status(200).json({
+      message: "Token refreshed successfully",
+      token: newToken
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+module.exports = { RegisterStudent, studentlogin, adminregister, adminlogin, getStudentProfile, getStudentProgress, refreshToken };

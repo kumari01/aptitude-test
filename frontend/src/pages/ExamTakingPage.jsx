@@ -338,8 +338,17 @@ export function ExamTakingPage() {
                 setAnswers(loadedAnswers);
               }
             } catch (err) {
-              console.warn("Could not load saved answers:", err);
+              console.warn("Could not load saved answers from API, attempting local recovery:", err);
             }
+
+            // Offline resilience fallback: rehydrate any locally saved answers
+            try {
+              const cached = localStorage.getItem(`exam_answers_${attempt._id}`);
+              if (cached) {
+                const parsed = JSON.parse(cached);
+                setAnswers((prev) => ({ ...parsed, ...prev }));
+              }
+            } catch (e) {}
           }
         }
       } catch (err) {
@@ -392,6 +401,9 @@ export function ExamTakingPage() {
       } catch (err) {
         console.warn("Backend submit error, using client calculation:", err);
       }
+      try {
+        localStorage.removeItem(`exam_answers_${attemptId}`);
+      } catch (e) {}
     }
 
     const answeredCount = Object.keys(answers).length;

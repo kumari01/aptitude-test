@@ -23,5 +23,7 @@ router.post("/admin/signup", authController.adminregister);
 // Admin login
 router.post("/admin/login",authController.adminlogin);
 
+// Sliding token refresh
+router.post("/refresh", authController.refreshToken);
 
 module.exports = router;

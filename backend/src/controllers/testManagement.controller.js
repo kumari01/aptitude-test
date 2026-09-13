@@ -68,6 +68,15 @@ const createTest = async (req, res) => {
         });
         await target.save();
 
+        const { logAdminAction } = require("../utils/auditLogger");
+        logAdminAction({
+            adminId: req.user?.id || createdBy,
+            action: "CREATE_TEST",
+            targetType: "Exam",
+            targetId: test._id,
+            details: { title: test.title, durationMinutes: test.durationMinutes }
+        });
+
         res.status(201).json({
             message: "Test created successfully",
             test,
@@ -965,6 +974,15 @@ const reauthorizeStudentAttempt = async (req, res) => {
         // Delete the disqualified attempt so student can write a fresh attempt
         await ExamAttempt.findByIdAndDelete(attemptId);
 
+        const { logAdminAction } = require("../utils/auditLogger");
+        logAdminAction({
+            adminId: req.user?.id,
+            action: "REAUTHORIZE_STUDENT_ATTEMPT",
+            targetType: "ExamAttempt",
+            targetId: attemptId,
+            details: { studentId, testId }
+        });
+
         res.status(200).json({
             message: "Student attempt has been successfully reset. The student is re-authorized to retake the examination.",
             studentId,
@@ -972,6 +990,18 @@ const reauthorizeStudentAttempt = async (req, res) => {
         });
     } catch (err) {
         console.error("Error re-authorizing student attempt:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+// Get Admin Audit Logs
+const getAdminAuditLogs = async (req, res) => {
+    try {
+        const AuditLog = require("../model/auditLog.model");
+        const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(50);
+        res.status(200).json({ logs });
+    } catch (err) {
+        console.error("Error fetching audit logs:", err);
         res.status(500).json({ message: "Internal server error" });
     }
 };
@@ -991,5 +1021,6 @@ module.exports = {
     getTestDetails,
     listStudentAssignedTests,
     getAdminOverview,
-    getAdminAttempts
+    getAdminAttempts,
+    getAdminAuditLogs
 };

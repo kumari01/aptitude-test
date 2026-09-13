@@ -1,5 +1,6 @@
 # Environment variables
 .env
+.env.*
 
 # Node modules
 node_modules/
@@ -9,6 +10,10 @@ dist/
 build/
 
 # Logs
-*.logc;
+*.log
 
-/test
+# Tests and Test Folders
+test/
+tests/
+test_*
+*.test.js
