@@ -40,6 +40,11 @@ export function DashboardPage() {
 
 
   useEffect(() => {
+    if (!user) {
+      navigate("/login", { replace: true });
+      return;
+    }
+
     if (isAdmin) return;
 
     const fetchData = async () => {
@@ -152,6 +157,10 @@ export function DashboardPage() {
           .catch(() => null);
       } catch (error) {
         console.error("Dashboard fetch error:", error);
+        if (error.response?.status === 401) {
+          navigate("/login", { replace: true });
+          return;
+        }
         if (user) {
           setStudent(user);
         }

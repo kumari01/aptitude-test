@@ -16,28 +16,36 @@ export function AuthProvider({ children }) {
       const storedStudent = localStorage.getItem("student");
       const storedAdmin = localStorage.getItem("admin");
 
-      if (storedToken) {
-        setToken(storedToken);
-        api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
-
-        if (storedAdmin) {
-          try {
-            setUser(JSON.parse(storedAdmin));
-            setRole("admin");
-          } catch (e) {
-            console.error("Failed to parse stored admin data", e);
-          }
-        } else if (storedStudent) {
-          try {
-            setUser(JSON.parse(storedStudent));
-            setRole("student");
-          } catch (e) {
-            console.error("Failed to parse stored student data", e);
-          }
+      if (storedToken && storedStudent) {
+        try {
+          const parsedStudent = JSON.parse(storedStudent);
+          setToken(storedToken);
+          setUser(parsedStudent);
+          setRole("student");
+          api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
+        } catch (e) {
+          localStorage.clear();
         }
+      } else if (storedToken && storedAdmin) {
+        try {
+          const parsedAdmin = JSON.parse(storedAdmin);
+          setToken(storedToken);
+          setUser(parsedAdmin);
+          setRole("admin");
+          api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
+        } catch (e) {
+          localStorage.clear();
+        }
+      } else {
+        // Clear any orphan tokens or partial state
+        localStorage.removeItem("token");
+        localStorage.removeItem("student");
+        localStorage.removeItem("admin");
+        delete api.defaults.headers.common["Authorization"];
       }
     } catch (err) {
-      console.error("Error loading auth state from storage:", err);
+      console.error("Error loading auth state:", err);
+      localStorage.clear();
     } finally {
       setLoading(false);
     }
@@ -100,7 +108,7 @@ export function AuthProvider({ children }) {
     token,
     role,
     loading,
-    isAuthenticated: !!token,
+    isAuthenticated: Boolean(token && user),
     isAdmin: role === "admin",
     isStudent: role === "student",
     login,

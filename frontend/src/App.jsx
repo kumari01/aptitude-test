@@ -1,7 +1,7 @@
 import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "./components/layout/MainLayout";
-import { ProtectedRoute, AdminRoute, PublicOnlyRoute } from "./components/common/RouteGuards";
+import { ProtectedRoute, AdminRoute } from "./components/common/RouteGuards";
 
 // Route-level code splitting via dynamic imports for blazing-fast initial bundle loading
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -25,21 +25,16 @@ export default function App() {
   return (
     <Suspense fallback={<RouteSuspenseFallback />}>
       <Routes>
-        {/* Public auth route (redirects to dashboard if already logged in) */}
-        <Route
-          path="/login"
-          element={
-            <PublicOnlyRoute>
-              <LoginPage />
-            </PublicOnlyRoute>
-          }
-        />
+        {/* Landing page: opens the login page first */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Protected routes */}
+        {/* Auth / Login route */}
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* Protected routes (accessible only after login) */}
         <Route element={<ProtectedRoute />}>
-          {/* Main app layout routes */}
+          {/* Main app layout */}
           <Route element={<MainLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/exams" element={<ExamsPage />} />
             <Route path="/exams/:examId" element={<ExamDetailPage />} />
@@ -57,8 +52,8 @@ export default function App() {
           <Route path="/exams/:examId/result" element={<ExamResultPage />} />
         </Route>
 
-        {/* Catch-all fallback */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        {/* Unknown routes redirect to /login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Suspense>
   );
