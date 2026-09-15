@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, Navigate } from "react-router-dom";
 import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, HelpCircle, Check, X } from "lucide-react";
 import { INK, BRAND, FONT_DISPLAY } from "../constants/theme";
 import { exitFullscreen, isFullscreen } from "../utils/fullscreen";
 import api from "../api/axios";
+import { useAuth } from "../context/AuthContext";
 import { ExamResultSkeleton } from "../components/skeletons";
 
 export function ExamResultPage() {
   const { examId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+
+  // Route protection: if user is not authenticated, redirect directly to /login
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
 
   const state = location.state || {};
   const [loading, setLoading] = useState(true);

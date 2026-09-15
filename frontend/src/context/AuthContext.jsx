@@ -3,58 +3,57 @@ import api from "../api/axios";
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-  const [role, setRole] = useState(null); // "student" | "admin" | null
-  const [loading, setLoading] = useState(true);
-
-  // Initialize auth state from localStorage on mount
-  useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem("token");
-      const storedStudent = localStorage.getItem("student");
-      const storedAdmin = localStorage.getItem("admin");
-
-      if (storedToken && storedStudent) {
-        try {
-          const parsedStudent = JSON.parse(storedStudent);
-          setToken(storedToken);
-          setUser(parsedStudent);
-          setRole("student");
-          api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
-        } catch (e) {
-          localStorage.clear();
-        }
-      } else if (storedToken && storedAdmin) {
-        try {
-          const parsedAdmin = JSON.parse(storedAdmin);
-          setToken(storedToken);
-          setUser(parsedAdmin);
-          setRole("admin");
-          api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
-        } catch (e) {
-          localStorage.clear();
-        }
-      } else {
-        // Clear any orphan tokens or partial state
-        localStorage.removeItem("token");
-        localStorage.removeItem("student");
-        localStorage.removeItem("admin");
-        delete api.defaults.headers.common["Authorization"];
-      }
-    } catch (err) {
-      console.error("Error loading auth state:", err);
-      localStorage.clear();
-    } finally {
-      setLoading(false);
+// Helper function to read auth state synchronously from localStorage
+function getInitialAuthState() {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      return { user: null, token: null, role: null };
     }
-  }, []);
+
+    const studentJson = localStorage.getItem("student");
+    if (studentJson) {
+      const student = JSON.parse(studentJson);
+      // Ensure the student object actually has identifying fields
+      if (student && (student._id || student.rollno || student.email || student.username)) {
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+        return { user: student, token, role: "student" };
+      }
+    }
+
+    const adminJson = localStorage.getItem("admin");
+    if (adminJson) {
+      const admin = JSON.parse(adminJson);
+      // Ensure the admin object actually has identifying fields
+      if (admin && (admin._id || admin.adminid || admin.email || admin.username)) {
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+        return { user: admin, token, role: "admin" };
+      }
+    }
+
+    // Corrupted or incomplete storage: clean up immediately
+    localStorage.removeItem("token");
+    localStorage.removeItem("student");
+    localStorage.removeItem("admin");
+    delete api.defaults.headers.common["Authorization"];
+    return { user: null, token: null, role: null };
+  } catch (err) {
+    localStorage.clear();
+    delete api.defaults.headers.common["Authorization"];
+    return { user: null, token: null, role: null };
+  }
+}
+
+export function AuthProvider({ children }) {
+  const [authState, setAuthState] = useState(getInitialAuthState);
+  const { user, token, role } = authState;
 
   const login = useCallback((newToken, userData, userRole = "student") => {
-    setToken(newToken);
-    setUser(userData);
-    setRole(userRole);
+    setAuthState({
+      token: newToken,
+      user: userData,
+      role: userRole,
+    });
 
     try {
       localStorage.setItem("token", newToken);
@@ -73,9 +72,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
-    setToken(null);
-    setUser(null);
-    setRole(null);
+    setAuthState({
+      token: null,
+      user: null,
+      role: null,
+    });
 
     try {
       localStorage.removeItem("token");
@@ -88,10 +89,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   const updateUser = useCallback((updatedUserData) => {
-    setUser((prev) => {
-      const nextUser = { ...prev, ...updatedUserData };
+    setAuthState((prev) => {
+      const nextUser = { ...prev.user, ...updatedUserData };
       try {
-        if (role === "admin") {
+        if (prev.role === "admin") {
           localStorage.setItem("admin", JSON.stringify(nextUser));
         } else {
           localStorage.setItem("student", JSON.stringify(nextUser));
@@ -99,15 +100,15 @@ export function AuthProvider({ children }) {
       } catch (e) {
         console.error("Failed to update user in storage:", e);
       }
-      return nextUser;
+      return { ...prev, user: nextUser };
     });
-  }, [role]);
+  }, []);
 
   const value = {
     user,
     token,
     role,
-    loading,
+    loading: false, // Initialized synchronously so no loading flash
     isAuthenticated: Boolean(token && user),
     isAdmin: role === "admin",
     isStudent: role === "student",

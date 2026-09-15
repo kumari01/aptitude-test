@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { Trophy, FileText } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import { BRAND, FONT_DISPLAY } from "../constants/theme";
@@ -6,7 +7,13 @@ import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 
 export function ProfilePage() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+
+  // Route protection: if user is not authenticated, redirect directly to /login
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
   const [student, setStudent] = useState(user);
   const [progress, setProgress] = useState(null);
 

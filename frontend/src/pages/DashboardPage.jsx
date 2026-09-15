@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import {
   FileText,
   Clock,
@@ -23,7 +23,18 @@ import { BaseSkeleton, DashboardSkeleton } from "../components/skeletons";
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isAuthenticated } = useAuth();
+
+  // Route protection: if user is not authenticated, redirect directly to /login
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Admin users are rendered with AdminDashboardPage
+  if (isAdmin) {
+    return <AdminDashboardPage />;
+  }
+
   const [student, setStudent] = useState(user);
   const [progress, setProgress] = useState(null);
   const [liveExam, setLiveExam] = useState(null);
@@ -200,9 +211,6 @@ export function DashboardPage() {
     }
   };
 
-  if (isAdmin) {
-    return <AdminDashboardPage />;
-  }
 
   if (pageLoading) {
     return <DashboardSkeleton />;

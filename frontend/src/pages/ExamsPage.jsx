@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { 
   FileText, 
   Clock, 
@@ -43,7 +43,12 @@ const formatForDateTimeLocal = (dateInput) => {
 export function ExamsPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isAuthenticated, user } = useAuth();
+
+  // Route protection: if user is not authenticated, redirect directly to /login
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
 
   // Click outside ref for 3-dots popover so full-screen backdrop doesn't block scroll
   const activeMenuRef = useRef(null);

@@ -7,15 +7,7 @@ import { useAuth } from "../../context/AuthContext";
  * If not logged in, redirects directly to /login.
  */
 export function ProtectedRoute() {
-  const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-600 font-medium">Loading...</p>
-      </div>
-    );
-  }
+  const { isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -29,15 +21,7 @@ export function ProtectedRoute() {
  * If not admin, redirects to /login.
  */
 export function AdminRoute() {
-  const { isAuthenticated, isAdmin, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-600 font-medium">Loading...</p>
-      </div>
-    );
-  }
+  const { isAuthenticated, isAdmin } = useAuth();
 
   if (!isAuthenticated || !isAdmin) {
     return <Navigate to="/login" replace />;

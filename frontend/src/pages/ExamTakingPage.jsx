@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Navigate } from "react-router-dom";
 import { 
   Clock, Flag, ChevronLeft, ChevronRight, AlertCircle, Loader2, 
   Bookmark, BookmarkCheck, RotateCcw, LayoutGrid, X, Check, Eye, Maximize2 
@@ -7,6 +7,7 @@ import {
 import { formatTime } from "../utils/formatters";
 import { BRAND, BRAND_TINT, INK, FONT_DISPLAY, FONT_BODY } from "../constants/theme";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import { requestFullscreen, exitFullscreen, isFullscreen } from "../utils/fullscreen";
 import api from "../api/axios";
 
@@ -14,6 +15,12 @@ export function ExamTakingPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { user, isAuthenticated } = useAuth();
+
+  // Route protection: if user is not authenticated, redirect directly to /login
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
 
   const [exam, setExam] = useState({ title: "Assessment Test", minutes: 30 });
   const [questions, setQuestions] = useState([]);

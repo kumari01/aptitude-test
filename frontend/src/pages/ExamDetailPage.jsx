@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Navigate } from "react-router-dom";
 import { ChevronLeft, FileText, Clock, CheckCircle2, AlertTriangle, ArrowRight, ShieldAlert, X, Maximize2 } from "lucide-react";
 import { BRAND, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { requestFullscreen } from "../utils/fullscreen";
 import { ExamDetailSkeleton } from "../components/skeletons";
@@ -10,6 +11,12 @@ import { ExamDetailSkeleton } from "../components/skeletons";
 export function ExamDetailPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+
+  // Route protection: if user is not authenticated, redirect directly to /login
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
   const [exam, setExam] = useState({ title: "Loading...", category: "Aptitude", minutes: 30, totalMarks: 0 });
   const [setting, setSetting] = useState(null);
   const [schedule, setSchedule] = useState(null);

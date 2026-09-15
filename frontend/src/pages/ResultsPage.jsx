@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { Search, Clock, Calendar, CheckCircle2, TrendingUp, Trophy, Loader2 } from "lucide-react";
 import StatCard from "../components/common/StatCard";
 import StatusPill from "../components/common/StatusPill";
 import { BRAND, INK, FONT_DISPLAY } from "../constants/theme";
 import api from "../api/axios";
+import { useAuth } from "../context/AuthContext";
 import { ResultsPageSkeleton } from "../components/skeletons";
 
 export function ResultsPage() {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+
+  // Route protection: if user is not authenticated, redirect directly to /login
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
   const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
